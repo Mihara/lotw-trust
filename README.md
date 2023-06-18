@@ -8,7 +8,7 @@ Do not use this program for anything critical. Right now it's still very much an
 
 ## What is it?
 
-**TLDR**: This is a program that allows you to sign any file with the private key you get when you signin up with [Logbook of the World](https://lotw.arrl.org/). It also allows anyone to verify such a signature and determine your callsign. This is all it does, this is all it *should* be doing, and if it proves sufficiently reliable, this can open up many opportunities for doing things remotely over the radio.
+**TLDR**: This is a program that allows you to sign any file with the private key you get when you sign up with the [Logbook of the World](https://lotw.arrl.org/). It also allows anyone to verify such a signature and determine your callsign. This is all it does, this is all it *should* be doing, and if it proves sufficiently reliable, this can open up many opportunities for doing things remotely over the radio.
 
 If you don't know what Logbook of the World is, you probably don't care, feel free to resume your doomscrolling.
 

@@ -36,11 +36,11 @@ To simplify things, a public key infrastructure with a central certificate autho
 
 To verify that a key on layer #3 is what it says it is, you need to follow the chain of signatures to the Big Master Key in #1. Which is trivial, when the public parts of all of these keys are published in well-known locations -- or, as is more common, the public part of the #1 key is published, and the public part of #2 key is included with #3 wherever you got the signed piece of data. This is how most SSL certificates all over the Internet work, in fact.
 
-This is not quite so with LoTW, where `.tq8` files only include your own public key, that is, layer #3. The only place where I found the requisite #2 and #1 layer public keys was my own `.p12` key file -- there is no obvious way it's published on their website. *(Which I am going to be writing them about the moment they let me on their lotw-devel mailing list.)* To make matters more complicated, the #1 Big Master Key is not stable, and appears to change, on average, once per decade. And the key for this decade isn't signed by the key from the previous decade either.
+This is not quite so with LoTW, where `.tq8` files only include your own public key, that is, layer #3. The only place where I found the requisite #2 and #1 layer public keys was my own `.tq6` file that arrived from LoTW with my certificate -- there is no obvious way it's published on their website. *(Which I am going to be writing them about the moment they let me on their lotw-devel mailing list.)* To make matters more complicated, the #1 Big Master Key is not stable, and appears to change, on average, once per decade. And the key for this decade isn't signed by the key from the previous decade either.
 
-Which means that if LoTW made a new layer #2 key after you got your #3 key and received the corresponding `.p12` key file, the data you posess will be insufficient to verify the authenticity of a `.tq8` file signed by a person who got their `.p12` later than you -- not without LoTW doing this for you, which they aren't doing.
+Which means that if LoTW made a new layer #2 key after you got your #3 key and received the corresponding `.tq6` key file, the data you posess will be insufficient to verify the authenticity of a `.tq8` file signed by a person who got their `.tq6` later than you -- not without LoTW doing this for you, which they aren't doing.
 
-`lotw-trust` attempts to work around this by keeping a list of layer #1 and #2 keys known to belong to LoTW, -- that is, I took them from *my* `.p12` file -- and, when signing things, packing every public key that comes in your `.p12` file that it hasn't seen before in with the signature. However, I anticipate this will not be sufficient long term, and `lotw-trust` will need to be updated on average no less than once a year to keep working.
+`lotw-trust` attempts to work around this by keeping a list of layer #1 and #2 keys known to belong to LoTW, -- that is, I took them from *my* `.tq6` file -- and, when signing things, packing every public key that comes in your `.tq6` file that it hasn't seen before in with the signature. However, I anticipate this will not be sufficient long term, and `lotw-trust` will need to be updated on average no less than once a year to keep working.
 
 ### RSA keys
 
@@ -59,9 +59,9 @@ I am also not certain I fully understand what I am doing. The way I use standard
 * `lotw-trust sign <your .p12 file> <input file> <output file>` to produce a signed file.
 * `lotw-trust verify <input file> <output file>` to verify a signed file and produce the one without a signature block at the end. Will print the callsign of the signer to stderr.
 
-See `lotw-trust --help` and `lotw-trust <command> --help` for further options, not that there are any yet, except the one to supply a password for your `.p12` file.
+You can get a `.p12` file with your private key and all the associated public keys by exporting your certificate from tQSL, the same way you would do it for uploading to clublog.org or QRZ.com
 
-If you have misplaced your original `.p12` file, you can export it from tqsl.
+See `lotw-trust --help` and `lotw-trust <command> --help` for further options, not that there are any yet, except the one to supply a password for your `.p12` file, if you've set one for whatever reason.
 
 The signature block tries to be compact, *(about 1500 bytes if everything is well, can't be much shorter than that)* and is appended to the end of the file. For a good number of files, extra data tacked onto the end will not have any effect on the way their native programs process them: `zip` files unpack just as they did, `png` and `jpg` files remain viewable, and only plaintext formats will suffer from the appearance of a binary blob on the end.
 

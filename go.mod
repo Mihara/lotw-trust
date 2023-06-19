@@ -1,4 +1,4 @@
-module lotw-trust/main
+module github.com/Mihara/lotw-trust
 
 go 1.20
 

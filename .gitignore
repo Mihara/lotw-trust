@@ -20,3 +20,4 @@ go.work
 # Local stuff
 .vscode/launch.json
 build/*
+lotw-trust

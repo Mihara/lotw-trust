@@ -4,7 +4,9 @@
 
 This is highly experimental.
 
-Do not use this program for anything critical. Right now it's still very much an evening project waiting for feedback from people trying to use it.
+Do not use this program for anything critical. Right now it's still very much an evening project waiting for feedback from people trying to use it. The signature format is not yet stable, and changes in the near future are likely to introduce an incompatibility.
+
+Please experiment with it, that's the right word.
 
 ## What is it?
 
@@ -42,6 +44,14 @@ Which means that if LoTW made a new layer #2 key after you got your #3 key and r
 
 `lotw-trust` attempts to work around this by keeping a list of layer #1 and #2 keys known to belong to LoTW, -- that is, I took them from *my* `.tq6` file -- and, when signing things, packing every public key that comes in your `.tq6` file that it hasn't seen before in with the signature. However, I anticipate this will not be sufficient long term, and `lotw-trust` will need to be updated on average no less than once a year to keep working.
 
+### Certificate revocation
+
+There is currently no way for us to know if a user's certificate has been revoked or not. LoTW does not expose this information publicly anywhere, so you can only know if it expired, because that's written inside the certificate itself.
+
+### Date of signing
+
+There is currently no provision to date the signing of the file, i.e. if you check the signature of a file signed in the past after the public key used in it has expired, it will be considered invalid. I am not sure what is the correct way to deal with this just yet.
+
 ### RSA keys
 
 `lotw-trust` currently assumes that LoTW issues and will forever issue only RSA-based x509 certificates. This is not guaranteed. In fact, it'd be better if they switched to something more modern, even if I would have to code to handle that.
@@ -63,7 +73,7 @@ You can get a `.p12` file with your private key and all the associated public ke
 
 See `lotw-trust --help` and `lotw-trust <command> --help` for further options, not that there are any yet, except the one to supply a password for your `.p12` file, if you've set one for whatever reason.
 
-The signature block tries to be compact, *(about 1500 bytes if everything is well, can't be much shorter than that)* and is appended to the end of the file. For a good number of files, extra data tacked onto the end will not have any effect on the way their native programs process them: `zip` files unpack just as they did, `png` and `jpg` files remain viewable, and only plaintext formats will suffer from the appearance of a binary blob on the end.
+The signature block tries to be compact, *(about 1500 bytes if everything is well, can't be much shorter than that)* and is appended to the end of the file. For a good number of file formats, extra data tacked onto the end will not have any effect on the way their native programs process them: `zip` files unpack just as they did, `png` and `jpg` files remain viewable, and only plaintext formats will suffer from the appearance of a binary blob on the end.
 
 ## Installation and compilation
 
@@ -71,8 +81,18 @@ This is a [Go](https://go.dev/) program, so this should be easy enough, provided
 
     go install github.com/mihara/lotw-trust
 
-Binaries are provided in the releases section. At the moment, it's very probable most of them don't actually run. There will be a version for Raspberry later on.
+Binaries are provided in the releases section. At the moment, it's very probable most of them don't actually run.
+
+## Plans for future development
+
+Since so far, every comment about this that I received has been positive, even if the number of comments have been small, here's what I'm going to do next:
+
+1. Clean the thing up and make error messages make sense where possible.
+2. Reading and writing standard input and standard output.
+3. An ASCII-armor style file format specifically designed for signing text messages, so that you could in theory stick the signer inside Winlink as a filter.
+4. Ability to save the signature block completely separately from the signed file and read such signatures.
+5. Ability to omit the public key from the message, which should reduce the file size increase introduced by signing from ~1500 bytes to ~180, as well as the ability to cache public keys when signatures are verified. This way, you would send your first message to someone with a full signature, and subsequent ones could be abbreviated.
 
 ## License
 
-This program is released under the term of MIT license. See the full text in [LICENSE](LICENSE)
+This program is released under the terms of MIT license. See the full text in [LICENSE](LICENSE)

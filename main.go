@@ -12,6 +12,7 @@ import (
 	"os"
 	"reflect"
 
+	"github.com/blang/semver/v4"
 	"github.com/fxamacker/cbor/v2"
 	"github.com/integrii/flaggy"
 	"software.sslmate.com/src/go-pkcs12"
@@ -21,6 +22,7 @@ import (
 var version string
 
 const sigHeader = "\nLOTW-TRUST SIG\n"
+const footerSize = 2 // uint16 to keep the size of the sig block.
 
 var signCmd *flaggy.Subcommand
 var verifyCmd *flaggy.Subcommand
@@ -31,10 +33,16 @@ var inputFile string
 var outputFile string
 
 // SigBlock is a struct containing the signature and associated data.
+// This structure is meant to be stable from here on out, and is encoded
+// in the file in a standard CBOR packet, see https://cbor.io/
 type SigBlock struct {
-	Sig []byte   `cbor:"0,keyasint"`
-	Cer []byte   `cbor:"1,keyasint"`
-	Ca  [][]byte `cbor:"2,keyasint,omitempty"`
+	Version   string `cbor:"0,keyasint"`
+	Callsign  string `cbor:"1,keyasint"`
+	Signature []byte `cbor:"2,keyasint,omitempty"`
+	// 3 is reserved.
+	Certificate []byte `cbor:"4,keyasint,omitempty"`
+	// 5 is reserved.
+	CA [][]byte `cbor:"6,keyasint,omitempty"`
 }
 
 //go:embed roots/*.der
@@ -101,6 +109,8 @@ func main() {
 	l := log.New(os.Stderr, "", 1)
 	l.SetFlags(0)
 
+	myVersion, _ := semver.Parse(version)
+
 	// Parse our embedded root certificates.
 	// Because x509 stupidly does not export more data about certpool structure,
 	// I have to duplicate it.
@@ -124,7 +134,6 @@ func main() {
 		pKey, cert, caChain, err := pkcs12.DecodeChain(keyData, keyPass)
 		check(err)
 
-		// Yes, the callsign really has this type.
 		callsign := getCallsign(*cert)
 		if callsign == "" {
 			l.Fatal("The signing key does not appear to be a LoTW key.")
@@ -136,10 +145,13 @@ func main() {
 		check(err)
 
 		hashed := sha256.Sum256(fileData)
-
-		signature, err := rsa.SignPKCS1v15(nil, pKey.(*rsa.PrivateKey), crypto.SHA256, hashed[:])
+		signature, err := rsa.SignPKCS1v15(nil,
+			pKey.(*rsa.PrivateKey),
+			crypto.SHA256,
+			hashed[:],
+		)
 		if err != nil {
-			l.Fatal("Signing failure, which probably means a new type of LoTW key:", err)
+			l.Fatal("Signing failure, which probably means a new type of LoTW key: ", err)
 			return
 		}
 
@@ -153,13 +165,17 @@ func main() {
 		}
 
 		// And there we have it, our signature data.
-		sig := SigBlock{signature, cert.Raw, certlist}
+		sig := SigBlock{
+			Version:     version,
+			Callsign:    callsign,
+			Signature:   signature,
+			Certificate: cert.Raw,
+			CA:          certlist,
+		}
 
 		// Now we're back to trying to stuff them into a sig block.
 		buf, err := cbor.Marshal(sig)
 		check(err)
-
-		// TODO: Set up base64 sigs around here, if I'm doing this at all.
 
 		sigBlock := append([]byte(sigHeader), buf...)
 		// If the sig block somehow got longer than 65kb, we have a problem anyway.
@@ -184,38 +200,51 @@ func main() {
 		check(err)
 
 		// The last two bytes of the file are the size of the sig block.
-		lb := fileData[len(fileData)-2:]
+		lb := fileData[len(fileData)-footerSize:]
 		lbBuf := new(bytes.Buffer)
 		_, _ = lbBuf.Write(lb)
 		var sigLen uint16
 		err = binary.Read(lbBuf, binary.BigEndian, &sigLen)
 		check(err)
 
-		split := len(fileData) - 2 - int(sigLen)
+		split := len(fileData) - footerSize - int(sigLen)
 		sigBlock := fileData[split:]
 		fileData = fileData[:split]
 
 		if !reflect.DeepEqual(sigBlock[:len(sigHeader)], []byte(sigHeader)) {
 			l.Fatal("File does not appear to be signed.")
 		}
-		hashed := sha256.Sum256(fileData)
 
 		// Now we need to unmarshal the sig.
 		var sigData SigBlock
 		err = cbor.Unmarshal(sigBlock[len(sigHeader):], &sigData)
 		check(err)
-		cert, err := x509.ParseCertificate(sigData.Cer)
+		cert, err := x509.ParseCertificate(sigData.Certificate)
 		check(err)
 
-		// Build the pool of intermediary certs supplied with it.
+		// We can verify the signatures on versions lower than ours, but not vice versa.
+		sigVersion, err := semver.Parse(sigData.Version)
+		check(err)
+		if myVersion.Compare(sigVersion) < 0 {
+			l.Fatal("File is signed with a newer version of lotw-trust than v{}", myVersion)
+		}
+
+		// Build the pool of intermediary certs supplied with the sig.
 		extraCerts := x509.NewCertPool()
-		for _, der := range sigData.Ca {
-			crt, _ := x509.ParseCertificate(der)
+		for _, der := range sigData.CA {
+			crt, err := x509.ParseCertificate(der)
+			check(err)
 			extraCerts.AddCert(crt)
 		}
 
 		// Verify the actual signature.
-		err = rsa.VerifyPKCS1v15(cert.PublicKey.(*rsa.PublicKey), crypto.SHA256, hashed[:], sigData.Sig)
+		hashed := sha256.Sum256(fileData)
+		err = rsa.VerifyPKCS1v15(
+			cert.PublicKey.(*rsa.PublicKey),
+			crypto.SHA256,
+			hashed[:],
+			sigData.Signature,
+		)
 		check(err)
 
 		_, err = cert.Verify(x509.VerifyOptions{
@@ -225,6 +254,12 @@ func main() {
 		})
 		check(err)
 		l.Println("Signed by:", getCallsign(*cert))
+
+		if err := os.WriteFile(outputFile, fileData, 0666); err != nil {
+			l.Fatal(err)
+		}
+
+		// Everything went fine!
 		os.Exit(0)
 
 	} else {

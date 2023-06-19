@@ -13,7 +13,6 @@ import (
 	"log"
 	"math"
 	"os"
-	"reflect"
 	"time"
 
 	"github.com/blang/semver/v4"
@@ -97,9 +96,7 @@ Released under the terms of MIT license.`
 
 func certInList(a []*x509.Certificate, x *x509.Certificate) bool {
 	for _, n := range a {
-		// I'm not sure this is the best way to identify if two certs are the same,
-		// but should do for now.
-		if reflect.DeepEqual(x.SubjectKeyId, n.SubjectKeyId) {
+		if bytes.Equal(x.SubjectKeyId, n.SubjectKeyId) {
 			return true
 		}
 	}
@@ -278,7 +275,7 @@ func main() {
 			sigBlock = slurpFile(sigFile)
 		}
 
-		if !reflect.DeepEqual(sigBlock[:len(sigHeader)], []byte(sigHeader)) {
+		if !bytes.Equal(sigBlock[:len(sigHeader)], []byte(sigHeader)) {
 			l.Fatal("Missing signature header, file probably isn't signed.")
 		}
 

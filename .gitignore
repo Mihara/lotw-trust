@@ -21,3 +21,5 @@ go.work
 .vscode/launch.json
 build/*
 lotw-trust
+test.sh
+

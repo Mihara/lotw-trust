@@ -4,7 +4,7 @@
 
 This is highly experimental.
 
-Do not use this program for anything critical. Right now it's still very much an evening project waiting for feedback from people trying to use it. The signature format is not yet stable.
+Do not use this program for anything critical. Right now it's still very much an evening project waiting for feedback from people trying to use it. The signature format is not yet stable, and neither is the text mode format.
 
 Please experiment with it, that's the right word.
 
@@ -79,6 +79,8 @@ It's possible to save the signature block to a separate file, verify such a sign
 
 Notice that while public keys get cached, intermediate certificates do not, and if your signing situation results in bundling intermediate certificates, I would very much like to see them. To save them, you can use `lotw-trust verify -d <input file>` and email the files that it dumps to me.
 
+`lotw-trust sign -t` and `lotw-trust verify -t` will treat the file as text, resulting in an ASCII-armor style file format that you could, in theory, stick into a pipeline in Winlink to automatically sign messages you send. Trying to sign binary files with this flag will produce ugly results.
+
 ## Installation and compilation
 
 This is a [Go](https://go.dev/) program, so this should be easy enough, provided you have a working Go installation:
@@ -89,9 +91,9 @@ Binaries are provided in the releases section. At the moment, it's very probable
 
 ## Plans for future development
 
-There's only one major thing I think this tool is missing: An ASCII-armor style file format specifically designed for signing text messages, so that you could in theory stick the signer inside Winlink as a filter and automatically sign messages you send.
+As of this moment, this tool is feature complete. Now it needs to become bug-free and formats need to stabilize.
 
-Even that, technically, can be done in pure shell script with what's already there, now I need reports from people trying to actually use this. :)
+Alternatively it could be completely forgotten as most innovations usually are. It's not like radio didn't work without all that before.
 
 ## License
 

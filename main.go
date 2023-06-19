@@ -2,18 +2,21 @@ package main
 
 import (
 	"bytes"
+	"compress/zlib"
 	"crypto"
 	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/x509"
 	"embed"
 	"encoding/binary"
+	"encoding/pem"
 	"fmt"
 	"io"
 	"log"
 	"math"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/adrg/xdg"
@@ -28,8 +31,14 @@ var version string
 
 const minSupportedVersion = "0.0.3"
 
-const sigHeader = "\nLOTW-TRUST SIG\n"
 const footerSize = 2 // uint16 to keep the size of the sig block.
+
+const textModeHeader = "-----BEGIN LOTW-TRUST MESSAGE-----\n"
+const textModeFooter = "\n-----END LOTW-TRUST MESSAGE-----\n"
+const textModeSigPem = "LOTW-TRUST SIG"
+
+// Binary mode header is the same with extra newlines.
+const sigHeader = "\n" + textModeSigPem + "\n"
 
 var signCmd *flaggy.Subcommand
 var verifyCmd *flaggy.Subcommand
@@ -39,6 +48,7 @@ var keyFile string
 var keyPass string
 var dumpDer bool
 var omitCert bool
+var textMode bool
 var inputFile string
 var outputFile string
 var sigFile string
@@ -89,12 +99,14 @@ Released under the terms of MIT license.`, dataDir)
 	signCmd.AddPositionalValue(&keyFile, "CALLSIGN.p12", 1, true, "Your LoTW signing key.")
 	signCmd.String(&keyPass, "p", "password", "Password for unlocking the key, if required.")
 	signCmd.String(&sigFile, "s", "sig_file", "Save the signature block into a separate file. You can use '=' to send it to standard output.")
+	signCmd.Bool(&textMode, "t", "textmode", "Treat the file as readable text and produce a human-readable signature.")
 	signCmd.Bool(&omitCert, "a", "abbreviate", "Save a shorter version of signature block that does not include public keys.")
 	signCmd.AddPositionalValue(&inputFile, "INPUT", 2, true, "Input file to be signed. '=' to read from standard input.")
 	signCmd.AddPositionalValue(&outputFile, "OUTPUT", 3, false, "Output file. '=' to write to standard output.")
 
 	verifyCmd = flaggy.NewSubcommand("verify")
 	verifyCmd.Description = "Verify a file signed with a LoTW key."
+	verifyCmd.Bool(&textMode, "t", "textmode", "The input contains a text mode signature, and must be treated as such.")
 	verifyCmd.Bool(&dumpDer, "d", "dump_der", "Dump included CA certificates for investigation.")
 	verifyCmd.String(&sigFile, "s", "sig_file", "Read the signature block from a separate file. You can use '=' to read it from standard input.")
 	verifyCmd.AddPositionalValue(&inputFile, "INPUT", 1, true, "Input file to be verified. '=' to read from standard input.")
@@ -160,6 +172,31 @@ func saveFile(filename string, fileData []byte) {
 	}
 }
 
+func normalizeLineEndings(text []byte) []byte {
+	output := normalizeLineEndingsString(string(text))
+	return []byte(output)
+}
+
+func normalizeLineEndingsString(text string) string {
+	// I.e. CRLF, as PGP and friends do.
+	// Since we do not actually change the output format,
+	// it doesn't matter that much, as long as it's consistent
+	// so that a CRLF message does not get mis-verified on an LF system.
+	const replacement = "\r\n"
+
+	var replacer = strings.NewReplacer(
+		"\r\n", replacement,
+		"\r", replacement,
+		"\n", replacement,
+		"\v", replacement,
+		"\f", replacement,
+		"\u0085", replacement,
+		"\u2028", replacement,
+		"\u2029", replacement,
+	)
+	return replacer.Replace(text)
+}
+
 func main() {
 
 	myVersion, _ := semver.Parse(version)
@@ -207,7 +244,13 @@ func main() {
 		var hashingData []byte
 		dateString, _ := signingTime.MarshalText()
 
-		hashingData = append(fileData, dateString...)
+		if textMode {
+			// In text mode, we must normalize line endings to something before hashing.
+			hashingData = normalizeLineEndings(fileData)
+			hashingData = append(hashingData, dateString...)
+		} else {
+			hashingData = append(fileData, dateString...)
+		}
 
 		hashed := sha256.Sum256(hashingData)
 		signature, err := rsa.SignPKCS1v15(nil,
@@ -249,14 +292,46 @@ func main() {
 			l.Fatal("Signature block too long, which means something else went wrong.")
 		}
 
-		sigLen := uint16(len(sigBlock))
-		lb := new(bytes.Buffer)
-		_ = binary.Write(lb, binary.BigEndian, sigLen)
+		var savingData []byte
 
-		sigBlock = append(sigBlock, lb.Bytes()...)
+		if textMode {
+			// Text mode makes things vastly more cumbersome.
+			// PEM to the rescue!
+
+			textData := textModeHeader
+			textData += string(fileData)
+			textData += textModeFooter
+			savingData = []byte(textData)
+
+			// The actual sig block is gzipped to save space lost from encoding to base64.
+			var gzSig bytes.Buffer
+			z, _ := zlib.NewWriterLevel(&gzSig, zlib.BestCompression)
+			_, _ = z.Write(buf)
+			_ = z.Close()
+
+			displayTime, _ := sig.SigningTime.UTC().Truncate(time.Second).MarshalText()
+			sigPemBlock := &pem.Block{
+				Type:  textModeSigPem,
+				Bytes: gzSig.Bytes(),
+				Headers: map[string]string{
+					"Signer": sig.Callsign,
+					"Date":   string(displayTime),
+				},
+			}
+
+			savingData = append(savingData, pem.EncodeToMemory(sigPemBlock)...)
+
+		} else {
+			sigLen := uint16(len(sigBlock))
+			lb := new(bytes.Buffer)
+			_ = binary.Write(lb, binary.BigEndian, sigLen)
+
+			sigBlock = append(sigBlock, lb.Bytes()...)
+			savingData = append(fileData, sigBlock...)
+		}
 
 		// Save it.
-		saveFile(outputFile, append(fileData, sigBlock...))
+		saveFile(outputFile, savingData)
 		// Notice this will only try saving anything if sigFile is given.
 		saveFile(sigFile, sigBlock)
 
@@ -270,34 +345,64 @@ func main() {
 		var sigBlock []byte
 
 		if sigFile == "" {
-			// The last two bytes of the file are the size of the sig block.
-			lb := fileData[len(fileData)-footerSize:]
-			lbBuf := new(bytes.Buffer)
-			_, _ = lbBuf.Write(lb)
-			var sigLen uint16
-			err = binary.Read(lbBuf, binary.BigEndian, &sigLen)
-			check(err, "Could not read signature block tail.")
 
-			split := len(fileData) - footerSize - int(sigLen)
+			if textMode {
+				// Text mode makes everything more complicated on read, too.
+				textData := string(fileData)
+				_, restText, found := strings.Cut(textData, textModeHeader)
+				if !found {
+					l.Fatal("The file does not appear to be signed in text mode.")
+				}
+				signedText, _, found := strings.Cut(restText, textModeFooter)
+				if !found {
+					l.Fatal("Signed message seems to have lost a chunk.")
+				}
+				fileData = []byte(normalizeLineEndingsString(signedText))
 
-			if split < 0 {
-				l.Fatal("Broken or missing signature block.")
+				block, _ := pem.Decode([]byte(restText))
+				if block == nil || block.Type != textModeSigPem {
+					l.Fatal("Signature not found.")
+				}
+				z, _ := zlib.NewReader(bytes.NewReader(block.Bytes))
+				sigBlock, err = io.ReadAll(z)
+				check(err, "Damaged signature.")
+
+			} else {
+				// The last two bytes of the file are the size of the sig block.
+				lb := fileData[len(fileData)-footerSize:]
+				lbBuf := new(bytes.Buffer)
+				_, _ = lbBuf.Write(lb)
+				var sigLen uint16
+				err = binary.Read(lbBuf, binary.BigEndian, &sigLen)
+				check(err, "Could not read signature block tail.")
+
+				split := len(fileData) - footerSize - int(sigLen)
+
+				if split < 0 {
+					l.Fatal("Broken or missing signature block.")
+				}
+
+				sigBlock = fileData[split:]
+				fileData = fileData[:split]
 			}
-
-			sigBlock = fileData[split:]
-			fileData = fileData[:split]
 
 		} else {
 			sigBlock = slurpFile(sigFile)
 		}
 
-		if !bytes.Equal(sigBlock[:len(sigHeader)], []byte(sigHeader)) {
-			l.Fatal("Missing signature header, file probably isn't signed.")
+		if !textMode {
+			if !bytes.Equal(sigBlock[:len(sigHeader)], []byte(sigHeader)) {
+				l.Fatal("Missing signature header, file probably isn't signed.")
+			}
 		}
 
 		// Now we need to unmarshal the sig.
 		var sigData SigBlock
-		err = cbor.Unmarshal(sigBlock[len(sigHeader):], &sigData)
+		if textMode {
+			err = cbor.Unmarshal(sigBlock, &sigData)
+		} else {
+			err = cbor.Unmarshal(sigBlock[len(sigHeader):], &sigData)
+		}
 		check(err, "Could not parse signature block:")
 
 		// We can verify the signatures on versions lower than ours, sometimes, but not vice versa.
@@ -383,6 +488,12 @@ func main() {
 
 		displayTime, _ := verificationTime.UTC().MarshalText()
 		l.Println("Signed by:", getCallsign(*cert), "on", string(displayTime))
+		if textMode {
+			textData := []byte(fmt.Sprintf("\n-----VERIFIED BY LOTW-TRUST-----\nSigned by: %s on %s",
+				getCallsign(*cert),
+				string(displayTime)))
+			fileData = append(fileData, textData...)
+		}
 
 		saveFile(outputFile, fileData)
 

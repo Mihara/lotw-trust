@@ -8,9 +8,11 @@ import (
 	"crypto/x509"
 	"embed"
 	"encoding/binary"
+	"fmt"
 	"log"
 	"os"
 	"reflect"
+	"time"
 
 	"github.com/blang/semver/v4"
 	"github.com/fxamacker/cbor/v2"
@@ -21,6 +23,8 @@ import (
 //go:embed version.txt
 var version string
 
+const minSupportedVersion = "0.0.3"
+
 const sigHeader = "\nLOTW-TRUST SIG\n"
 const footerSize = 2 // uint16 to keep the size of the sig block.
 
@@ -29,20 +33,20 @@ var verifyCmd *flaggy.Subcommand
 
 var keyFile string
 var keyPass string
+var dumpDer bool
 var inputFile string
 var outputFile string
 
 // SigBlock is a struct containing the signature and associated data.
-// This structure is meant to be stable from here on out, and is encoded
-// in the file in a standard CBOR packet, see https://cbor.io/
+// This structure is meant to be stable from here on out, but currently isn't.
+// It is encoded in the file in a standard CBOR packet, see https://cbor.io/
 type SigBlock struct {
-	Version   string `cbor:"0,keyasint"`
-	Callsign  string `cbor:"1,keyasint"`
-	Signature []byte `cbor:"2,keyasint,omitempty"`
-	// 3 is reserved.
-	Certificate []byte `cbor:"4,keyasint,omitempty"`
-	// 5 is reserved.
-	CA [][]byte `cbor:"6,keyasint,omitempty"`
+	Version     string    `cbor:"0,keyasint"`
+	Callsign    string    `cbor:"1,keyasint"`
+	Signature   []byte    `cbor:"2,keyasint,omitempty"`
+	SigningTime time.Time `cbor:"3,keyasint,omitempty"`
+	Certificate []byte    `cbor:"4,keyasint,omitempty"`
+	CA          [][]byte  `cbor:"5,keyasint,omitempty"`
 }
 
 //go:embed roots/*.der
@@ -65,6 +69,7 @@ func init() {
 
 	verifyCmd = flaggy.NewSubcommand("verify")
 	verifyCmd.Description = "Verify a file."
+	verifyCmd.Bool(&dumpDer, "d", "dump_der", "Dump included CA certificates for investigation.")
 	verifyCmd.AddPositionalValue(&inputFile, "INPUT", 1, true, "Input file to be verified.")
 	verifyCmd.AddPositionalValue(&outputFile, "OUTPUT", 2, false, "Output file.")
 
@@ -134,6 +139,13 @@ func main() {
 		pKey, cert, caChain, err := pkcs12.DecodeChain(keyData, keyPass)
 		check(err)
 
+		if time.Now().After(cert.NotAfter) {
+			l.Fatal("Cannot use a LoTW certificate beyond its expiry time.")
+		}
+		if time.Now().Before(cert.NotBefore) {
+			l.Fatal("Cannot use a LoTW certificate before it goes active.")
+		}
+
 		callsign := getCallsign(*cert)
 		if callsign == "" {
 			l.Fatal("The signing key does not appear to be a LoTW key.")
@@ -144,7 +156,14 @@ func main() {
 		fileData, err := os.ReadFile(inputFile)
 		check(err)
 
-		hashed := sha256.Sum256(fileData)
+		signingTime := time.Now().UTC().Truncate(time.Second)
+
+		var hashingData []byte
+		dateString, err := signingTime.MarshalText()
+		check(err)
+		hashingData = append(fileData, dateString...)
+
+		hashed := sha256.Sum256(hashingData)
 		signature, err := rsa.SignPKCS1v15(nil,
 			pKey.(*rsa.PrivateKey),
 			crypto.SHA256,
@@ -171,6 +190,7 @@ func main() {
 			Signature:   signature,
 			Certificate: cert.Raw,
 			CA:          certlist,
+			SigningTime: signingTime,
 		}
 
 		// Now we're back to trying to stuff them into a sig block.
@@ -219,41 +239,68 @@ func main() {
 		var sigData SigBlock
 		err = cbor.Unmarshal(sigBlock[len(sigHeader):], &sigData)
 		check(err)
-		cert, err := x509.ParseCertificate(sigData.Certificate)
-		check(err)
 
-		// We can verify the signatures on versions lower than ours, but not vice versa.
+		// We can verify the signatures on versions lower than ours, sometimes, but not vice versa.
 		sigVersion, err := semver.Parse(sigData.Version)
 		check(err)
 		if myVersion.Compare(sigVersion) < 0 {
 			l.Fatal("File is signed with a newer version of lotw-trust than v{}", myVersion)
 		}
 
+		if myVersion.Compare(sigVersion) > 0 {
+			oldVersion, _ := semver.Parse(minSupportedVersion)
+			if sigVersion.Compare(oldVersion) < 0 {
+				l.Fatal("Cannot verify signatures made with versions older than v{}", minSupportedVersion)
+			}
+		}
+
+		cert, err := x509.ParseCertificate(sigData.Certificate)
+		check(err)
+
 		// Build the pool of intermediary certs supplied with the sig.
 		extraCerts := x509.NewCertPool()
-		for _, der := range sigData.CA {
+		for idx, der := range sigData.CA {
 			crt, err := x509.ParseCertificate(der)
 			check(err)
 			extraCerts.AddCert(crt)
+			if dumpDer {
+				// Save certificates: This is the easy way to send me a LoTW certificate
+				// lotw-trust does not yet recognize.
+				if err := os.WriteFile(
+					fmt.Sprintf("%s_%d.der", sigData.Callsign, idx),
+					crt.Raw, 0666); err != nil {
+					l.Fatal(err)
+				}
+			}
 		}
 
 		// Verify the actual signature.
-		hashed := sha256.Sum256(fileData)
+		var hashingData []byte
+		verificationTime := sigData.SigningTime.UTC().Truncate(time.Second)
+		dateString, err := verificationTime.MarshalText()
+		check(err)
+		hashingData = append(fileData, dateString...)
+
+		hashed := sha256.Sum256(hashingData)
 		err = rsa.VerifyPKCS1v15(
 			cert.PublicKey.(*rsa.PublicKey),
 			crypto.SHA256,
 			hashed[:],
 			sigData.Signature,
 		)
-		check(err)
+		if err != nil {
+			l.Fatal("Could not verify signature: ", err)
+		}
 
 		_, err = cert.Verify(x509.VerifyOptions{
 			Intermediates: extraCerts,
 			Roots:         roots,
+			CurrentTime:   verificationTime,
 			KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
 		})
 		check(err)
-		l.Println("Signed by:", getCallsign(*cert))
+		displayTime, _ := verificationTime.UTC().MarshalText()
+		l.Println("Signed by:", getCallsign(*cert), "on", string(displayTime))
 
 		if err := os.WriteFile(outputFile, fileData, 0666); err != nil {
 			l.Fatal(err)

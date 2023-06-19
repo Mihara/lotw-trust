@@ -4,7 +4,7 @@
 
 This is highly experimental.
 
-Do not use this program for anything critical. Right now it's still very much an evening project waiting for feedback from people trying to use it. The signature format is not yet stable, and changes in the near future are likely to introduce an incompatibility.
+Do not use this program for anything critical. Right now it's still very much an evening project waiting for feedback from people trying to use it. The signature format is not yet stable.
 
 Please experiment with it, that's the right word.
 
@@ -46,11 +46,7 @@ Which means that if LoTW made a new layer #2 key after you got your #3 key and r
 
 ### Certificate revocation
 
-There is currently no way for us to know if a user's certificate has been revoked or not. LoTW does not expose this information publicly anywhere, so you can only know if it expired, because that's written inside the certificate itself.
-
-### Date of signing
-
-There is currently no provision to date the signing of the file, i.e. if you check the signature of a file signed in the past after the public key used in it has expired, it will be considered invalid. I am not sure what is the correct way to deal with this just yet.
+There is currently no way for us to know if a user's certificate has been revoked or not. LoTW does not expose this information publicly anywhere, so you can only know if it expired, because that's written inside the certificate itself. Similarly, there is no way to prevent you from using an expired certificate.
 
 ### RSA keys
 

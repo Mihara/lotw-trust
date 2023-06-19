@@ -89,7 +89,9 @@ Binaries are provided in the releases section. At the moment, it's very probable
 
 ## Plans for future development
 
-Since so far, every comment about this that I received has been positive, even if the number of comments have been small, but there's only one major thing I think this tool is missing: An ASCII-armor style file format specifically designed for signing text messages, so that you could in theory stick the signer inside Winlink as a filter and automatically sign messages you send.
+There's only one major thing I think this tool is missing: An ASCII-armor style file format specifically designed for signing text messages, so that you could in theory stick the signer inside Winlink as a filter and automatically sign messages you send.
+
+Even that, technically, can be done in pure shell script with what's already there, now I need reports from people trying to actually use this. :)
 
 ## License
 

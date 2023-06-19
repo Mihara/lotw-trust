@@ -69,9 +69,13 @@ I am also not certain I fully understand what I am doing. The way I use standard
 
 You can get a `.p12` file with your private key and all the associated public keys by exporting your certificate from tQSL, the same way you would do it for uploading to clublog.org or QRZ.com
 
-See `lotw-trust --help` and `lotw-trust <command> --help` for further options, there are some.
+See `lotw-trust --help` and `lotw-trust <command> --help` for further options.
 
-The signature block tries to be compact, *(about 1500 bytes if everything is well, can't be much shorter than that)* and is appended to the end of the file. For a good number of file formats, extra data tacked onto the end will not have any effect on the way their native programs process them: `zip` files unpack just as they did, `png` and `jpg` files remain viewable, and only plaintext formats will suffer from the appearance of a binary blob on the end.
+The signature block tries to be compact, *(about 1500 bytes if everything is well, can't be much shorter than that)* and is appended to the end of the file by default. For a good number of file formats, extra data tacked onto the end will not have any effect on the way their native programs process them: `zip` files unpack just as they did, `png` and `jpg` files remain viewable, and only plaintext formats will suffer from the appearance of a binary blob on the end.
+
+It's possible to save the signature block to a separate file, verify such a signature, as well as read and write data from stdin and to stdout with further command line options.
+
+Of particular note is `lotw-trust verify -d <input file>`. If your signed file includes any extra certificates beyond the signer's own public key, this means you have discovered a new LoTW intermediate signing key, in which case I would very much like to see the files that `-d` will dump.
 
 ## Installation and compilation
 

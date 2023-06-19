@@ -201,7 +201,7 @@ func main() {
 			crypto.SHA256,
 			hashed[:],
 		)
-		check(err, "Signing failure, which probably means a new type of LoTW key:")
+		check(err, "Signing failure, which probably means you have a new, unknown type of LoTW key:")
 
 		// Now we need to filter roots out of the chain.
 		// This is also pretty cringe, golang people, how do you live like that.
@@ -304,6 +304,9 @@ func main() {
 
 		// Build the pool of intermediary certs supplied with the sig.
 		extraCerts := x509.NewCertPool()
+		if dumpDer {
+			l.Println("Will attempt to save included intermediate certificates...")
+		}
 		for idx, der := range sigData.CA {
 			crt, err := x509.ParseCertificate(der)
 			check(err, "Could not parse intermediate certificate authority data:")
@@ -311,11 +314,13 @@ func main() {
 			if dumpDer {
 				// Save certificates: This is the easy way to send me a LoTW certificate
 				// lotw-trust does not yet recognize.
+				certName := fmt.Sprintf("%s_%d.der", sigData.Callsign, idx)
 				if err := os.WriteFile(
-					fmt.Sprintf("%s_%d.der", sigData.Callsign, idx),
+					certName,
 					crt.Raw, 0666); err != nil {
 					l.Fatal(err)
 				}
+				l.Println("Saved", certName)
 			}
 		}
 

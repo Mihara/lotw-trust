@@ -121,7 +121,6 @@ func main() {
 		// Now for actual code...
 		keyData, err := os.ReadFile(keyFile)
 		check(err)
-		// Empty password for now
 		pKey, cert, caChain, err := pkcs12.DecodeChain(keyData, keyPass)
 		check(err)
 

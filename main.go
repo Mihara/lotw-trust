@@ -30,6 +30,7 @@ var keyPass string
 var inputFile string
 var outputFile string
 
+// SigBlock is a struct containing the signature and associated data.
 type SigBlock struct {
 	Sig []byte   `cbor:"0,keyasint"`
 	Cer []byte   `cbor:"1,keyasint"`
@@ -67,10 +68,10 @@ func init() {
 
 }
 
-// I'm not sure this is the best way to identify if two certs are the same,
-// but should do for now.
-func CertInList(a []*x509.Certificate, x *x509.Certificate) bool {
+func certInList(a []*x509.Certificate, x *x509.Certificate) bool {
 	for _, n := range a {
+		// I'm not sure this is the best way to identify if two certs are the same,
+		// but should do for now.
 		if reflect.DeepEqual(x.SubjectKeyId, n.SubjectKeyId) {
 			return true
 		}
@@ -84,7 +85,7 @@ func check(e error) {
 	}
 }
 
-func Callsign(c x509.Certificate) string {
+func getCallsign(c x509.Certificate) string {
 	// This is how LoTW certificates encode callsign, I have no idea why.
 	callsign := ""
 	for _, subject := range c.Subject.Names {
@@ -125,7 +126,7 @@ func main() {
 		check(err)
 
 		// Yes, the callsign really has this type.
-		callsign := Callsign(*cert)
+		callsign := getCallsign(*cert)
 		if callsign == "" {
 			l.Fatal("The signing key does not appear to be a LoTW key.")
 			return
@@ -147,7 +148,7 @@ func main() {
 		// This is also pretty cringe, golang people, how do you live like that.
 		var certlist [][]byte
 		for _, c := range caChain {
-			if !CertInList(rootCerts, c) {
+			if !certInList(rootCerts, c) {
 				certlist = append(certlist, c.Raw)
 			}
 		}
@@ -224,7 +225,7 @@ func main() {
 			KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
 		})
 		check(err)
-		l.Println("Signed by:", Callsign(*cert))
+		l.Println("Signed by:", getCallsign(*cert))
 		os.Exit(0)
 
 	} else {

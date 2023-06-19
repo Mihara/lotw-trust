@@ -372,8 +372,12 @@ func main() {
 		_, err = cert.Verify(x509.VerifyOptions{
 			Intermediates: extraCerts,
 			Roots:         roots,
-			CurrentTime:   verificationTime,
-			KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
+			// LoTW intermediate certificates are *expected* to expire during
+			// the public key's lifetime, so we must verify it with time
+			// set to the day it was issued, rather than any other day,
+			// otherwise verification can fail for no good reason.
+			CurrentTime: cert.NotBefore.Add(time.Hour),
+			KeyUsages:   []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
 		})
 		check(err, "Failed to verify public key:")
 

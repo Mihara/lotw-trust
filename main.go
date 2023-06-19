@@ -9,7 +9,9 @@ import (
 	"embed"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"log"
+	"math"
 	"os"
 	"reflect"
 	"time"
@@ -30,12 +32,14 @@ const footerSize = 2 // uint16 to keep the size of the sig block.
 
 var signCmd *flaggy.Subcommand
 var verifyCmd *flaggy.Subcommand
+var l *log.Logger
 
 var keyFile string
 var keyPass string
 var dumpDer bool
 var inputFile string
 var outputFile string
+var sigFile string
 
 // SigBlock is a struct containing the signature and associated data.
 // This structure is meant to be stable from here on out, but currently isn't.
@@ -54,24 +58,34 @@ var dataFiles embed.FS
 
 func init() {
 
+	l = log.New(os.Stderr, "", 1)
+	l.SetFlags(0)
+
 	keyPass = ""
 
 	flaggy.SetName("lotw-trust")
-	flaggy.SetDescription("Sign and verify arbitrary files with your LoTW tQSL signing key.")
+	flaggy.SetDescription(fmt.Sprint("Sign and verify arbitrary files with your LoTW tQSL signing key. \nversion ", version))
+
+	flaggy.DefaultParser.AdditionalHelpAppend = `
+Copyright © 2023 Eugene Medvedev (R2AZE).
+See the source code at: https://github.com/Mihara/lotw-trust
+Released under the terms of MIT license.`
 
 	// Create the subcommand
 	signCmd = flaggy.NewSubcommand("sign")
-	signCmd.Description = "Sign a file."
+	signCmd.Description = "Sign a file with your LoTW key."
 	signCmd.AddPositionalValue(&keyFile, "CALLSIGN.p12", 1, true, "Your LoTW signing key.")
 	signCmd.String(&keyPass, "p", "password", "Password for unlocking the key, if required.")
-	signCmd.AddPositionalValue(&inputFile, "INPUT", 2, true, "Input file to be signed.")
-	signCmd.AddPositionalValue(&outputFile, "OUTPUT", 3, false, "Output file.")
+	signCmd.String(&sigFile, "s", "sig_file", "Save the signature block into a separate file. You can use '=' to send it to standard output.")
+	signCmd.AddPositionalValue(&inputFile, "INPUT", 2, true, "Input file to be signed. '=' to read from standard input.")
+	signCmd.AddPositionalValue(&outputFile, "OUTPUT", 3, false, "Output file. '=' to write to standard output.")
 
 	verifyCmd = flaggy.NewSubcommand("verify")
-	verifyCmd.Description = "Verify a file."
+	verifyCmd.Description = "Verify a file signed with a LoTW key."
 	verifyCmd.Bool(&dumpDer, "d", "dump_der", "Dump included CA certificates for investigation.")
-	verifyCmd.AddPositionalValue(&inputFile, "INPUT", 1, true, "Input file to be verified.")
-	verifyCmd.AddPositionalValue(&outputFile, "OUTPUT", 2, false, "Output file.")
+	verifyCmd.String(&sigFile, "s", "sig_file", "Read the signature block from a separate file. You can use '=' to read it from standard input.")
+	verifyCmd.AddPositionalValue(&inputFile, "INPUT", 1, true, "Input file to be verified. '=' to read from standard input.")
+	verifyCmd.AddPositionalValue(&outputFile, "OUTPUT", 2, false, "Output file. '=' to write to standard output.")
 
 	flaggy.AttachSubcommand(signCmd, 1)
 	flaggy.AttachSubcommand(verifyCmd, 1)
@@ -92,9 +106,9 @@ func certInList(a []*x509.Certificate, x *x509.Certificate) bool {
 	return false
 }
 
-func check(e error) {
+func check(e error, message string) {
 	if e != nil {
-		panic(e)
+		l.Fatal(message, e)
 	}
 }
 
@@ -109,10 +123,33 @@ func getCallsign(c x509.Certificate) string {
 	return callsign
 }
 
-func main() {
+func slurpFile(filename string) []byte {
+	var fileData []byte
+	var err error
+	if inputFile == "=" {
+		fileData, err = io.ReadAll(os.Stdin)
+	} else {
+		fileData, err = os.ReadFile(filename)
+	}
+	check(err, "Error while reading input file:")
+	return fileData
+}
 
-	l := log.New(os.Stderr, "", 1)
-	l.SetFlags(0)
+func saveFile(filename string, fileData []byte) {
+	if filename != "" {
+		if filename == "=" {
+			if _, err := os.Stdout.Write(fileData); err != nil {
+				l.Fatal("Error while saving a file:", err)
+			}
+		} else {
+			if err := os.WriteFile(filename, fileData, 0666); err != nil {
+				l.Fatal("Error while saving a file:", err)
+			}
+		}
+	}
+}
+
+func main() {
 
 	myVersion, _ := semver.Parse(version)
 
@@ -132,12 +169,12 @@ func main() {
 	}
 
 	if signCmd.Used {
-
-		// Now for actual code...
+		// Signing a file
 		keyData, err := os.ReadFile(keyFile)
-		check(err)
+		check(err, "Could not read the key file:")
+
 		pKey, cert, caChain, err := pkcs12.DecodeChain(keyData, keyPass)
-		check(err)
+		check(err, "Could not make sense of the key file:")
 
 		if time.Now().After(cert.NotAfter) {
 			l.Fatal("Cannot use a LoTW certificate beyond its expiry time.")
@@ -149,18 +186,16 @@ func main() {
 		callsign := getCallsign(*cert)
 		if callsign == "" {
 			l.Fatal("The signing key does not appear to be a LoTW key.")
-			return
 		}
 
 		// Slurp the input file...
-		fileData, err := os.ReadFile(inputFile)
-		check(err)
+		fileData := slurpFile(inputFile)
 
 		signingTime := time.Now().UTC().Truncate(time.Second)
 
 		var hashingData []byte
-		dateString, err := signingTime.MarshalText()
-		check(err)
+		dateString, _ := signingTime.MarshalText()
+
 		hashingData = append(fileData, dateString...)
 
 		hashed := sha256.Sum256(hashingData)
@@ -169,10 +204,7 @@ func main() {
 			crypto.SHA256,
 			hashed[:],
 		)
-		if err != nil {
-			l.Fatal("Signing failure, which probably means a new type of LoTW key: ", err)
-			return
-		}
+		check(err, "Signing failure, which probably means a new type of LoTW key:")
 
 		// Now we need to filter roots out of the chain.
 		// This is also pretty cringe, golang people, how do you live like that.
@@ -195,54 +227,70 @@ func main() {
 
 		// Now we're back to trying to stuff them into a sig block.
 		buf, err := cbor.Marshal(sig)
-		check(err)
+		check(err, "Could not assemble a sig block, something is very weird.")
 
 		sigBlock := append([]byte(sigHeader), buf...)
-		// If the sig block somehow got longer than 65kb, we have a problem anyway.
-		sigLen := uint16(len(sigBlock))
 
+		// If the sig block somehow got longer than 65kb, we have a problem anyway.
+		if len(sigBlock) > math.MaxUint16 {
+			l.Fatal("Signature block too long, which means something else went wrong.")
+		}
+
+		sigLen := uint16(len(sigBlock))
 		lb := new(bytes.Buffer)
-		err = binary.Write(lb, binary.BigEndian, sigLen)
-		check(err)
+		_ = binary.Write(lb, binary.BigEndian, sigLen)
 
 		sigBlock = append(sigBlock, lb.Bytes()...)
 
 		// Save it.
-		if err := os.WriteFile(outputFile, append(fileData, sigBlock...), 0666); err != nil {
-			l.Fatal(err)
-		}
+		saveFile(outputFile, append(fileData, sigBlock...))
+		// Notice this will only try saving anything if sigFile is given.
+		saveFile(sigFile, sigBlock)
 
 	} else if verifyCmd.Used {
+		// Verifying a file.
 
 		// Now I get to do it backwards!
+		var err error
+		fileData := slurpFile(inputFile)
 
-		fileData, err := os.ReadFile(inputFile)
-		check(err)
+		var sigBlock []byte
 
-		// The last two bytes of the file are the size of the sig block.
-		lb := fileData[len(fileData)-footerSize:]
-		lbBuf := new(bytes.Buffer)
-		_, _ = lbBuf.Write(lb)
-		var sigLen uint16
-		err = binary.Read(lbBuf, binary.BigEndian, &sigLen)
-		check(err)
+		if sigFile == "" {
+			// The last two bytes of the file are the size of the sig block.
+			lb := fileData[len(fileData)-footerSize:]
+			lbBuf := new(bytes.Buffer)
+			_, _ = lbBuf.Write(lb)
+			var sigLen uint16
+			err = binary.Read(lbBuf, binary.BigEndian, &sigLen)
+			check(err, "Could not read signature block tail.")
 
-		split := len(fileData) - footerSize - int(sigLen)
-		sigBlock := fileData[split:]
-		fileData = fileData[:split]
+			split := len(fileData) - footerSize - int(sigLen)
+
+			if split < 0 {
+				l.Fatal("Broken or missing signature block.")
+			}
+
+			sigBlock = fileData[split:]
+			fileData = fileData[:split]
+
+		} else {
+			sigBlock = slurpFile(sigFile)
+		}
 
 		if !reflect.DeepEqual(sigBlock[:len(sigHeader)], []byte(sigHeader)) {
-			l.Fatal("File does not appear to be signed.")
+			l.Fatal("Missing signature header, file probably isn't signed.")
 		}
 
 		// Now we need to unmarshal the sig.
 		var sigData SigBlock
 		err = cbor.Unmarshal(sigBlock[len(sigHeader):], &sigData)
-		check(err)
+		check(err, "Could not parse signature block:")
 
 		// We can verify the signatures on versions lower than ours, sometimes, but not vice versa.
 		sigVersion, err := semver.Parse(sigData.Version)
-		check(err)
+		check(err, "Broken version number in signature block:")
+
 		if myVersion.Compare(sigVersion) < 0 {
 			l.Fatal("File is signed with a newer version of lotw-trust than v{}", myVersion)
 		}
@@ -255,13 +303,13 @@ func main() {
 		}
 
 		cert, err := x509.ParseCertificate(sigData.Certificate)
-		check(err)
+		check(err, "Could not parse the public key included with signature:")
 
 		// Build the pool of intermediary certs supplied with the sig.
 		extraCerts := x509.NewCertPool()
 		for idx, der := range sigData.CA {
 			crt, err := x509.ParseCertificate(der)
-			check(err)
+			check(err, "Could not parse intermediate certificate authority data:")
 			extraCerts.AddCert(crt)
 			if dumpDer {
 				// Save certificates: This is the easy way to send me a LoTW certificate
@@ -278,7 +326,7 @@ func main() {
 		var hashingData []byte
 		verificationTime := sigData.SigningTime.UTC().Truncate(time.Second)
 		dateString, err := verificationTime.MarshalText()
-		check(err)
+		check(err, "Broken time information in signature:")
 		hashingData = append(fileData, dateString...)
 
 		hashed := sha256.Sum256(hashingData)
@@ -288,9 +336,7 @@ func main() {
 			hashed[:],
 			sigData.Signature,
 		)
-		if err != nil {
-			l.Fatal("Could not verify signature: ", err)
-		}
+		check(err, "Failed to verify signature:")
 
 		_, err = cert.Verify(x509.VerifyOptions{
 			Intermediates: extraCerts,
@@ -298,13 +344,12 @@ func main() {
 			CurrentTime:   verificationTime,
 			KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
 		})
-		check(err)
+		check(err, "Failed to verify public key:")
+
 		displayTime, _ := verificationTime.UTC().MarshalText()
 		l.Println("Signed by:", getCallsign(*cert), "on", string(displayTime))
 
-		if err := os.WriteFile(outputFile, fileData, 0666); err != nil {
-			l.Fatal(err)
-		}
+		saveFile(outputFile, fileData)
 
 		// Everything went fine!
 		os.Exit(0)

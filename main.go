@@ -13,8 +13,10 @@ import (
 	"log"
 	"math"
 	"os"
+	"path/filepath"
 	"time"
 
+	"github.com/adrg/xdg"
 	"github.com/blang/semver/v4"
 	"github.com/fxamacker/cbor/v2"
 	"github.com/integrii/flaggy"
@@ -36,9 +38,12 @@ var l *log.Logger
 var keyFile string
 var keyPass string
 var dumpDer bool
+var omitCert bool
 var inputFile string
 var outputFile string
 var sigFile string
+
+var dataDir string
 
 // SigBlock is a struct containing the signature and associated data.
 // This structure is meant to be stable from here on out, but currently isn't.
@@ -60,15 +65,23 @@ func init() {
 	l = log.New(os.Stderr, "", 1)
 	l.SetFlags(0)
 
+	dataDir = filepath.Join(xdg.DataHome, "lotw-trust")
+	if _, err := os.Stat(dataDir); os.IsNotExist(err) {
+		err := os.MkdirAll(dataDir, os.ModeDir|0o755)
+		check(err, "Could not create or open "+dataDir)
+	}
+
 	keyPass = ""
 
 	flaggy.SetName("lotw-trust")
 	flaggy.SetDescription(fmt.Sprint("Sign and verify arbitrary files with your LoTW tQSL signing key. \nversion ", version))
 
-	flaggy.DefaultParser.AdditionalHelpAppend = `
+	flaggy.DefaultParser.AdditionalHelpAppend = fmt.Sprintf(`
+Public keys are cached in %s
+
 Copyright © 2023 Eugene Medvedev (R2AZE).
 See the source code at: https://github.com/Mihara/lotw-trust
-Released under the terms of MIT license.`
+Released under the terms of MIT license.`, dataDir)
 
 	// Create the subcommand
 	signCmd = flaggy.NewSubcommand("sign")
@@ -76,6 +89,7 @@ Released under the terms of MIT license.`
 	signCmd.AddPositionalValue(&keyFile, "CALLSIGN.p12", 1, true, "Your LoTW signing key.")
 	signCmd.String(&keyPass, "p", "password", "Password for unlocking the key, if required.")
 	signCmd.String(&sigFile, "s", "sig_file", "Save the signature block into a separate file. You can use '=' to send it to standard output.")
+	signCmd.Bool(&omitCert, "a", "abbreviate", "Save a shorter version of signature block that does not include public keys.")
 	signCmd.AddPositionalValue(&inputFile, "INPUT", 2, true, "Input file to be signed. '=' to read from standard input.")
 	signCmd.AddPositionalValue(&outputFile, "OUTPUT", 3, false, "Output file. '=' to write to standard output.")
 
@@ -105,7 +119,7 @@ func certInList(a []*x509.Certificate, x *x509.Certificate) bool {
 
 func check(e error, message string) {
 	if e != nil {
-		l.Fatal(message, e)
+		l.Fatal(message, " ", e)
 	}
 }
 
@@ -217,9 +231,11 @@ func main() {
 			Version:     version,
 			Callsign:    callsign,
 			Signature:   signature,
-			Certificate: cert.Raw,
-			CA:          certlist,
 			SigningTime: signingTime,
+		}
+		if !omitCert {
+			sig.Certificate = cert.Raw
+			sig.CA = certlist
 		}
 
 		// Now we're back to trying to stuff them into a sig block.
@@ -299,8 +315,21 @@ func main() {
 			}
 		}
 
-		cert, err := x509.ParseCertificate(sigData.Certificate)
-		check(err, "Could not parse the public key included with signature:")
+		var cert *x509.Certificate
+		cacheCertFile := filepath.Join(dataDir, sigData.Callsign+".der")
+		if len(sigData.Certificate) > 0 {
+			cert, err = x509.ParseCertificate(sigData.Certificate)
+			check(err, "Could not parse the public key included with signature:")
+			// Save it in the cache.
+			err = os.WriteFile(cacheCertFile, cert.Raw, 0666)
+			check(err, "Could not save public key to cache.")
+		} else {
+			// Else we try to read one from our cache.
+			crtFile, err := os.ReadFile(cacheCertFile)
+			check(err, "The signature does not include a public key, and I could not read one from cache.")
+			cert, err = x509.ParseCertificate(crtFile)
+			check(err, "Could not parse a certificate in cache.")
+		}
 
 		// Build the pool of intermediary certs supplied with the sig.
 		extraCerts := x509.NewCertPool()

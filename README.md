@@ -22,7 +22,7 @@ You could apply the same trick to other web and email-based services, like, for 
 
 Fortunately, we can exploit the existing one: Logbook of the World is the biggest QSL verification service in the world and has many thousands of users who already have public keys. It's just a tooling problem.
 
-This project is an *(incomplete)* attempt to make that as easy to set up for a service owner as possible, by providing them with a simple, one-executable tool to sign and verify a file. There might be a GUI program to go with it later if necessary.
+This project is an *(almost complete)* attempt to make that as easy to set up for a service owner as possible, by providing them with a simple, one-executable tool to sign and verify a file. There might be a GUI program to go with it later if necessary.
 
 ## Caveats
 
@@ -48,7 +48,7 @@ It would be a lot smoother if I can get LoTW to publish their public keys proper
 
 ### Certificate revocation
 
-There is currently no way for us to know if a user's certificate has been revoked or not. LoTW does not expose this information publicly anywhere, so you can only know if it expired, because that's written inside the certificate itself. Similarly, there is no way to prevent you from using an expired certificate.
+There is currently no way for us to know if a user's certificate has been revoked or not. LoTW does not expose this information publicly anywhere, so you can only know if it expired, because that's written inside the certificate itself. Similarly, there is no way to prevent someone from using an expired certificate, since they can set the clock to what they want.
 
 ### RSA keys
 
@@ -75,7 +75,9 @@ The signature block tries to be compact, *(about 1500 bytes if everything is wel
 
 It's possible to save the signature block to a separate file, verify such a signature, as well as read and write data from stdin and to stdout with further command line options.
 
-Of particular note is `lotw-trust verify -d <input file>`. If your signed file includes any extra certificates beyond the signer's own public key, this means you have discovered a new LoTW intermediate signing key, in which case I would very much like to see the files that `-d` will dump.
+`lotw-trust sign -a <input file> <output file>` will save an abbreviated version of the signature block, that only contains the signature itself, which saves you about ~1000 bytes of message size. To verify that, the recipient must have *previously* verified a message signed with that public key -- they get cached for just such an occasion.
+
+Notice that while public keys get cached, intermediate certificates do not, and if your signing situation results in bundling intermediate certificates, I would very much like to see them. To save them, you can use `lotw-trust verify -d <input file>` and email the files that it dumps to me.
 
 ## Installation and compilation
 
@@ -87,10 +89,7 @@ Binaries are provided in the releases section. At the moment, it's very probable
 
 ## Plans for future development
 
-Since so far, every comment about this that I received has been positive, even if the number of comments have been small, here's what I'm going to do next:
-
-1. An ASCII-armor style file format specifically designed for signing text messages, so that you could in theory stick the signer inside Winlink as a filter.
-2. Ability to omit the public key from the message, which should reduce the file size increase introduced by signing from ~1500 bytes to ~180, as well as the ability to cache public keys when signatures are verified. This way, you would send your first message to someone with a full signature, and subsequent ones could be abbreviated.
+Since so far, every comment about this that I received has been positive, even if the number of comments have been small, but there's only one major thing I think this tool is missing: An ASCII-armor style file format specifically designed for signing text messages, so that you could in theory stick the signer inside Winlink as a filter and automatically sign messages you send.
 
 ## License
 

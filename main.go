@@ -207,7 +207,13 @@ func compress(in []byte) ([]byte, error) {
 		return in, nil
 	}
 	err = z.Close()
-	return zlibBuf.Bytes(), err
+	// And if the compressed block somehow turned out bigger than the uncompressed one,
+	// don't return it.
+	out := zlibBuf.Bytes()
+	if len(in) < len(out) {
+		return in, err
+	}
+	return out, err
 }
 
 func uncompress(in []byte) ([]byte, error) {

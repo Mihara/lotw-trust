@@ -4,7 +4,7 @@
 
 This is highly experimental.
 
-Do not use this program for anything critical. Right now it's still very much an evening project waiting for feedback from people trying to use it. The signature format is not yet stable, and neither is the text mode format.
+Do not use this program for anything critical. Right now it's still very much an evening project waiting for feedback from people trying to use it. The text mode format in particular is probably not stable.
 
 Please experiment with it, that's the right word.
 
@@ -59,10 +59,6 @@ It would be a lot smoother if I can get LoTW to publish their public keys proper
 There is currently no way for us to know if a user's certificate has been revoked or not. LoTW does not expose this information publicly anywhere, so you can only know if it expired, because that's written inside the certificate itself. I doubt they have set up the machinery for revoking certificates at all, in fact.
 
 Similarly, there is no way to prevent someone from using an expired certificate, since they can set the clock to what they want.
-
-### RSA keys
-
-`lotw-trust` currently assumes that LoTW issues and will forever issue only RSA-based x509 certificates. This is not guaranteed. In fact, it'd be better if they switched to something more modern, even if I would have to code to handle that.
 
 ### General caveats
 

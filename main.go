@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -325,11 +324,6 @@ func main() {
 		}
 
 		sigBlock := append([]byte(sigHeader), compressedSig...)
-
-		// If the sig block somehow got longer than 65kb, we have a problem anyway.
-		if len(sigBlock) > math.MaxUint16 {
-			l.Fatal("Signature block too long, which means something else went wrong.")
-		}
 
 		var savingData []byte
 

@@ -49,6 +49,7 @@ var keyPass string
 var dumpDer bool
 var omitCert bool
 var textMode bool
+var uncSig bool
 var inputFile string
 var outputFile string
 var sigFile string
@@ -100,6 +101,7 @@ Released under the terms of MIT license.`, dataDir)
 	signCmd.String(&keyPass, "p", "password", "Password for unlocking the key, if required.")
 	signCmd.String(&sigFile, "s", "sig_file", "Save the signature block into a separate file. You can use '=' to send it to standard output.")
 	signCmd.Bool(&textMode, "t", "textmode", "Treat the file as readable text and produce a human-readable signature.")
+	signCmd.Bool(&uncSig, "u", "uncompressed", "Do not compress the signature block. Use it when you are compressing the whole file with something better later on.")
 	signCmd.Bool(&omitCert, "a", "abbreviate", "Save a shorter version of signature block that does not include public keys.")
 	signCmd.AddPositionalValue(&inputFile, "INPUT", 2, true, "Input file to be signed. '=' to read from standard input.")
 	signCmd.AddPositionalValue(&outputFile, "OUTPUT", 3, false, "Output file. '=' to write to standard output.")
@@ -213,7 +215,8 @@ func compress(in []byte) ([]byte, error) {
 }
 
 func uncompress(in []byte) ([]byte, error) {
-	var out []byte
+	// This way, in case of error uncompressing we return what we got.
+	out := append([]byte(nil), in...)
 	z, err := zlib.NewReader(bytes.NewReader(in))
 	if err != nil {
 		return out, err
@@ -310,7 +313,10 @@ func main() {
 		buf, err := cbor.Marshal(sig)
 		check(err, "Could not assemble a sig block, something is very weird.")
 
-		sigBlock := append([]byte(sigHeader), buf...)
+		// The actual sig block is compressed with zlib to save space.
+		compressedSig, _ := compress(buf)
+
+		sigBlock := append([]byte(sigHeader), compressedSig...)
 
 		// If the sig block somehow got longer than 65kb, we have a problem anyway.
 		if len(sigBlock) > math.MaxUint16 {
@@ -327,9 +333,6 @@ func main() {
 			textData += string(fileData)
 			textData += textModeFooter
 			savingData = []byte(textData)
-
-			// The actual sig block is compressed with zlib to save space lost from encoding to base64.
-			compressedSig, _ := compress(buf)
 
 			displayTime, _ := sig.SigningTime.UTC().Truncate(time.Second).MarshalText()
 			sigPemBlock := &pem.Block{
@@ -412,19 +415,23 @@ func main() {
 			sigBlock = slurpFile(sigFile)
 		}
 
+		var sigData SigBlock
 		if !textMode {
 			if !bytes.Equal(sigBlock[:len(sigHeader)], []byte(sigHeader)) {
 				l.Fatal("Missing signature header, file probably isn't signed.")
 			}
+			sigBlock = sigBlock[len(sigHeader):]
+			// While we're at it, try to uncompress sig block.
+			sigBlock, err = uncompress(sigBlock)
+			// If the sig block was never compressed, this is the error we will get,
+			// so we eat it and move on.
+			if err != zlib.ErrHeader {
+				check(err, "Failed to decompress signature.")
+			}
 		}
 
 		// Now we need to unmarshal the sig.
-		var sigData SigBlock
-		if textMode {
-			err = cbor.Unmarshal(sigBlock, &sigData)
-		} else {
-			err = cbor.Unmarshal(sigBlock[len(sigHeader):], &sigData)
-		}
+		err = cbor.Unmarshal(sigBlock, &sigData)
 		check(err, "Could not parse signature block:")
 
 		// We can verify the signatures on versions lower than ours, sometimes, but not vice versa.

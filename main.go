@@ -53,7 +53,7 @@ var sigFile string
 var dataDir string
 
 // SigBlock is a struct containing the signature and associated data.
-// This structure is meant to be stable from here on out, but currently isn't.
+// This structure is meant to be stable from here on out.
 // It is encoded in the file in a standard CBOR packet, see https://cbor.io/
 type SigBlock struct {
 	Version     string    `cbor:"0,keyasint"`

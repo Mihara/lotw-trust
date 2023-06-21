@@ -8,7 +8,6 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"embed"
-	"encoding/binary"
 	"encoding/pem"
 	"fmt"
 	"io"
@@ -30,8 +29,6 @@ import (
 var version string
 
 const minSupportedVersion = "0.0.3"
-
-const footerSize = 2 // uint16 to keep the size of the sig block.
 
 const textModeHeader = "-----BEGIN LOTW-TRUST MESSAGE-----\n"
 const textModeFooter = "\n-----END LOTW-TRUST MESSAGE-----\n"
@@ -280,13 +277,19 @@ func main() {
 			hashingData = append(fileData, dateString...)
 		}
 
-		hashed := sha256.Sum256(hashingData)
-		signature, err := rsa.SignPKCS1v15(nil,
-			pKey.(*rsa.PrivateKey),
-			crypto.SHA256,
-			hashed[:],
-		)
-		check(err, "Signing failure, which probably means you have a new, unknown type of LoTW key:")
+		var signature []byte
+		switch cert.PublicKeyAlgorithm {
+		case x509.RSA:
+			hashed := sha256.Sum256(hashingData)
+			signature, err = rsa.SignPKCS1v15(nil,
+				pKey.(*rsa.PrivateKey),
+				crypto.SHA256,
+				hashed[:],
+			)
+		default:
+			l.Fatal("You have discovered a LoTW key of a previously unseen, unsupported type! Please email me about it.")
+		}
+		check(err, "Signing failure, something weird happened")
 
 		// Now we need to filter roots out of the chain.
 		// This is also pretty cringe, golang people, how do you live like that.
@@ -352,11 +355,6 @@ func main() {
 			savingData = append(savingData, pem.EncodeToMemory(sigPemBlock)...)
 
 		} else {
-			sigLen := uint16(len(sigBlock))
-			lb := new(bytes.Buffer)
-			_ = binary.Write(lb, binary.BigEndian, sigLen)
-
-			sigBlock = append(sigBlock, lb.Bytes()...)
 			savingData = append(fileData, sigBlock...)
 		}
 
@@ -401,22 +399,12 @@ func main() {
 				check(err, "Damaged signature.")
 
 			} else {
-				// The last two bytes of the file are the size of the sig block.
-				lb := fileData[len(fileData)-footerSize:]
-				lbBuf := new(bytes.Buffer)
-				_, _ = lbBuf.Write(lb)
-				var sigLen uint16
-				err = binary.Read(lbBuf, binary.BigEndian, &sigLen)
-				check(err, "Could not read signature block tail.")
-
-				split := len(fileData) - footerSize - int(sigLen)
-
-				if split < 0 {
+				sigStart := bytes.LastIndex(fileData, []byte(sigHeader))
+				if sigStart < 0 {
 					l.Fatal("Broken or missing signature block.")
 				}
-
-				sigBlock = fileData[split:]
-				fileData = fileData[:split]
+				sigBlock = fileData[sigStart:]
+				fileData = fileData[:sigStart]
 			}
 
 		} else {
@@ -447,13 +435,13 @@ func main() {
 		check(err, "Broken version number in signature block:")
 
 		if myVersion.Compare(sigVersion) < 0 {
-			l.Fatal("File is signed with a newer version of lotw-trust than v{}", myVersion)
+			l.Fatal("File is signed with a newer version of lotw-trust than v", myVersion)
 		}
 
 		if myVersion.Compare(sigVersion) > 0 {
 			oldVersion, _ := semver.Parse(minSupportedVersion)
 			if sigVersion.Compare(oldVersion) < 0 {
-				l.Fatal("Cannot verify signatures made with versions older than v{}", minSupportedVersion)
+				l.Fatal("Cannot verify signatures made with versions older than v", minSupportedVersion)
 			}
 		}
 
@@ -502,13 +490,20 @@ func main() {
 		check(err, "Broken time information in signature:")
 		hashingData = append(fileData, dateString...)
 
-		hashed := sha256.Sum256(hashingData)
-		err = rsa.VerifyPKCS1v15(
-			cert.PublicKey.(*rsa.PublicKey),
-			crypto.SHA256,
-			hashed[:],
-			sigData.Signature,
-		)
+		// Depending on what kind of public key we got, we may need to do different things.
+		switch cert.PublicKeyAlgorithm {
+		case x509.RSA:
+			hashed := sha256.Sum256(hashingData)
+			err = rsa.VerifyPKCS1v15(
+				cert.PublicKey.(*rsa.PublicKey),
+				crypto.SHA256,
+				hashed[:],
+				sigData.Signature,
+			)
+		default:
+			l.Fatal("Unsupported signature algorithm. This shouldn't happen, which means you found a bug.")
+		}
+
 		check(err, "Failed to verify signature:")
 
 		_, err = cert.Verify(x509.VerifyOptions{

@@ -446,15 +446,13 @@ func main() {
 		}
 
 		var cert *x509.Certificate
-		cacheCertFile := filepath.Join(dataDir, sigData.Callsign+".der")
+
 		if len(sigData.Certificate) > 0 {
 			cert, err = x509.ParseCertificate(sigData.Certificate)
 			check(err, "Could not parse the public key included with signature:")
-			// Save it in the cache.
-			err = os.WriteFile(cacheCertFile, cert.Raw, 0666)
-			check(err, "Could not save public key to cache.")
 		} else {
 			// Else we try to read one from our cache.
+			cacheCertFile := filepath.Join(dataDir, sigData.Callsign+".der")
 			crtFile, err := os.ReadFile(cacheCertFile)
 			check(err, "The signature does not include a public key, and I could not read one from cache.")
 			cert, err = x509.ParseCertificate(crtFile)
@@ -517,6 +515,11 @@ func main() {
 			KeyUsages:   []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
 		})
 		check(err, "Failed to verify public key:")
+
+		// Since we verified everything successfully, save the certficate in the cache.
+		cacheCertFile := filepath.Join(dataDir, getCallsign(*cert)+".der")
+		err = os.WriteFile(cacheCertFile, cert.Raw, 0666)
+		check(err, "Could not save public key to cache.")
 
 		displayTime, _ := verificationTime.UTC().MarshalText()
 		l.Println("Signed by:", getCallsign(*cert), "on", string(displayTime))

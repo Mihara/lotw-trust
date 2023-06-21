@@ -314,7 +314,12 @@ func main() {
 		check(err, "Could not assemble a sig block, something is very weird.")
 
 		// The actual sig block is compressed with zlib to save space.
-		compressedSig, _ := compress(buf)
+		var compressedSig []byte
+		if uncSig {
+			compressedSig = buf
+		} else {
+			compressedSig, _ = compress(buf)
+		}
 
 		sigBlock := append([]byte(sigHeader), compressedSig...)
 

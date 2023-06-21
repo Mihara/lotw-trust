@@ -383,10 +383,13 @@ func main() {
 				if !found {
 					l.Fatal("The file does not appear to be signed in text mode.")
 				}
-				signedText, _, found := strings.Cut(restText, textModeFooter)
-				if !found {
+
+				tailEnd := strings.LastIndex(restText, textModeFooter)
+				if tailEnd < 0 {
 					l.Fatal("Signed message seems to have lost a chunk.")
 				}
+				signedText := restText[:tailEnd]
+
 				fileData = []byte(normalizeTextString(signedText))
 
 				block, _ := pem.Decode([]byte(restText))

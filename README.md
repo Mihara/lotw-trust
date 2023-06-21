@@ -95,7 +95,7 @@ Notice that while public keys get cached, intermediate certificates do not, and 
 
 This is a [Go](https://go.dev/) program, so this should be easy enough, provided you have a working Go installation:
 
-    go install github.com/mihara/lotw-trust
+    go install github.com/Mihara/lotw-trust@latest
 
 It was written with go 1.20.5 and I currently don't know what's the minimum version requirement. Binaries for a number of platforms are provided in the releases section.
 

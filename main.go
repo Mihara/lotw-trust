@@ -200,24 +200,22 @@ func compress(in []byte) ([]byte, error) {
 	var zlibBuf bytes.Buffer
 	z, err := zlib.NewWriterLevel(&zlibBuf, zlib.BestCompression)
 	if err != nil {
-		return zlibBuf.Bytes(), nil
+		return in, nil
 	}
 	_, err = z.Write(in)
 	if err != nil {
-		return zlibBuf.Bytes(), nil
+		return in, nil
 	}
 	err = z.Close()
 	return zlibBuf.Bytes(), err
 }
 
 func uncompress(in []byte) ([]byte, error) {
-	// This way, in case of error uncompressing we return what we got.
-	out := append([]byte(nil), in...)
 	z, err := zlib.NewReader(bytes.NewReader(in))
 	if err != nil {
-		return out, err
+		return in, err
 	}
-	out, err = io.ReadAll(z)
+	out, err := io.ReadAll(z)
 	return out, err
 }
 

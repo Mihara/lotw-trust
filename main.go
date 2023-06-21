@@ -172,12 +172,12 @@ func saveFile(filename string, fileData []byte) {
 	}
 }
 
-func normalizeLineEndings(text []byte) []byte {
-	output := normalizeLineEndingsString(string(text))
+func normalizeText(text []byte) []byte {
+	output := normalizeTextString(string(text))
 	return []byte(output)
 }
 
-func normalizeLineEndingsString(text string) string {
+func normalizeTextString(text string) string {
 	// I.e. CRLF, as PGP and friends do.
 	// Since we do not actually change the output format,
 	// it doesn't matter that much, as long as it's consistent
@@ -195,6 +195,31 @@ func normalizeLineEndingsString(text string) string {
 		"\u2029", replacement,
 	)
 	return replacer.Replace(text)
+}
+
+// Abstracting away compression and decompression, since that will be used multiple times.
+func compress(in []byte) ([]byte, error) {
+	var zlibBuf bytes.Buffer
+	z, err := zlib.NewWriterLevel(&zlibBuf, zlib.BestCompression)
+	if err != nil {
+		return zlibBuf.Bytes(), nil
+	}
+	_, err = z.Write(in)
+	if err != nil {
+		return zlibBuf.Bytes(), nil
+	}
+	err = z.Close()
+	return zlibBuf.Bytes(), err
+}
+
+func uncompress(in []byte) ([]byte, error) {
+	var out []byte
+	z, err := zlib.NewReader(bytes.NewReader(in))
+	if err != nil {
+		return out, err
+	}
+	out, err = io.ReadAll(z)
+	return out, err
 }
 
 func main() {
@@ -246,7 +271,7 @@ func main() {
 
 		if textMode {
 			// In text mode, we must normalize line endings to something before hashing.
-			hashingData = normalizeLineEndings(fileData)
+			hashingData = normalizeText(fileData)
 			hashingData = append(hashingData, dateString...)
 		} else {
 			hashingData = append(fileData, dateString...)
@@ -303,16 +328,13 @@ func main() {
 			textData += textModeFooter
 			savingData = []byte(textData)
 
-			// The actual sig block is gzipped to save space lost from encoding to base64.
-			var gzSig bytes.Buffer
-			z, _ := zlib.NewWriterLevel(&gzSig, zlib.BestCompression)
-			_, _ = z.Write(buf)
-			_ = z.Close()
+			// The actual sig block is compressed with zlib to save space lost from encoding to base64.
+			compressedSig, _ := compress(buf)
 
 			displayTime, _ := sig.SigningTime.UTC().Truncate(time.Second).MarshalText()
 			sigPemBlock := &pem.Block{
 				Type:  textModeSigPem,
-				Bytes: gzSig.Bytes(),
+				Bytes: compressedSig,
 				Headers: map[string]string{
 					"Signer": sig.Callsign,
 					"Date":   string(displayTime),
@@ -357,14 +379,14 @@ func main() {
 				if !found {
 					l.Fatal("Signed message seems to have lost a chunk.")
 				}
-				fileData = []byte(normalizeLineEndingsString(signedText))
+				fileData = []byte(normalizeTextString(signedText))
 
 				block, _ := pem.Decode([]byte(restText))
 				if block == nil || block.Type != textModeSigPem {
 					l.Fatal("Signature not found.")
 				}
-				z, _ := zlib.NewReader(bytes.NewReader(block.Bytes))
-				sigBlock, err = io.ReadAll(z)
+
+				sigBlock, err = uncompress(block.Bytes)
 				check(err, "Damaged signature.")
 
 			} else {

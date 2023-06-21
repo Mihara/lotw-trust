@@ -48,7 +48,7 @@ The only place where I found the requisite #2 and #1 layer public keys was my ow
 
 As a result, if LoTW makes a new layer #2 key after you got your layer #3 key and received the corresponding `.tq6` key file, the data you possess will be insufficient to verify the authenticity of a `.tq8` file signed by a person who got their `.tq6` later than you. The way their layer #2 key expiry times are set, this inevitably happens.
 
-`lotw-trust` attempts to work around this by keeping a list of layer #1 and #2 keys known to belong to LoTW, -- that is, I took them from *my* `.tq6` file check the [roots directory](roots) -- and, when signing things, packing every public key that comes in your `.tq6` file that it hasn't seen before in with the signature. This bloats the signature size, and is best avoided.
+`lotw-trust` attempts to work around this by keeping a list of layer #1 and #2 keys known to belong to LoTW, -- that is, I took them from *my* `.tq6` file, check the [roots directory](roots) -- and, when signing things, packing every public key that comes in your `.tq6` file that it hasn't seen before in with the signature. This bloats the signature size, and is best avoided.
 
 To make matters more complicated, the #1 Big Master Key is also not eternal, and has an expiry time measured in decades -- the current one expires in 2025. It isn't signed by the key from the previous decade either, so you definitely will not be able to produce an unbroken chain of keys to known keys past 2025, when the current one expires, unless the new key surfaces in trustworthy data earlier than that.
 

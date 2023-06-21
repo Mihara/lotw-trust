@@ -241,10 +241,10 @@ func main() {
 	if signCmd.Used {
 		// Signing a file
 		keyData, err := os.ReadFile(keyFile)
-		check(err, "Could not read the key file:")
+		check(err, "Could not read the key file.")
 
 		pKey, cert, caChain, err := pkcs12.DecodeChain(keyData, keyPass)
-		check(err, "Could not make sense of the key file:")
+		check(err, "Could not make sense of the key file.")
 
 		if time.Now().After(cert.NotAfter) {
 			l.Fatal("Cannot use a LoTW certificate beyond its expiry time.")
@@ -286,7 +286,7 @@ func main() {
 		default:
 			l.Fatal("You have discovered a LoTW key of a previously unseen, unsupported type! Please email me about it.")
 		}
-		check(err, "Signing failure, something weird happened")
+		check(err, "Signing failure, something weird happened.")
 
 		// Now we need to filter roots out of the chain.
 		// This is also pretty cringe, golang people, how do you live like that.
@@ -420,11 +420,11 @@ func main() {
 
 		// Now we need to unmarshal the sig.
 		err = cbor.Unmarshal(sigBlock, &sigData)
-		check(err, "Could not parse signature block:")
+		check(err, "Could not parse signature block.")
 
 		// We can verify the signatures on versions lower than ours, sometimes, but not vice versa.
 		sigVersion, err := semver.Parse(sigData.Version)
-		check(err, "Broken version number in signature block:")
+		check(err, "Broken version number in signature block.")
 
 		if myVersion.Compare(sigVersion) < 0 {
 			l.Fatal("File is signed with a newer version of lotw-trust than v", myVersion)
@@ -441,7 +441,7 @@ func main() {
 
 		if len(sigData.Certificate) > 0 {
 			cert, err = x509.ParseCertificate(sigData.Certificate)
-			check(err, "Could not parse the public key included with signature:")
+			check(err, "Could not parse the public key included with signature.")
 		} else {
 			// Else we try to read one from our cache.
 			cacheCertFile := filepath.Join(dataDir, sigData.Callsign+".der")
@@ -458,7 +458,7 @@ func main() {
 		}
 		for idx, der := range sigData.CA {
 			crt, err := x509.ParseCertificate(der)
-			check(err, "Could not parse intermediate certificate authority data:")
+			check(err, "Could not parse intermediate certificate authority data.")
 			extraCerts.AddCert(crt)
 			if dumpDer {
 				// Save certificates: This is the easy way to send me a LoTW certificate
@@ -477,7 +477,7 @@ func main() {
 		var hashingData []byte
 		verificationTime := sigData.SigningTime.UTC().Truncate(time.Second)
 		dateString, err := verificationTime.MarshalText()
-		check(err, "Broken time information in signature:")
+		check(err, "Broken time information in signature.")
 		hashingData = append(fileData, dateString...)
 
 		// Depending on what kind of public key we got, we may need to do different things.
@@ -494,7 +494,7 @@ func main() {
 			l.Fatal("Unsupported signature algorithm. This shouldn't happen, which means you found a bug.")
 		}
 
-		check(err, "Failed to verify signature:")
+		check(err, "Failed to verify signature.")
 
 		_, err = cert.Verify(x509.VerifyOptions{
 			Intermediates: extraCerts,
@@ -506,7 +506,7 @@ func main() {
 			CurrentTime: cert.NotBefore.Add(time.Hour),
 			KeyUsages:   []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
 		})
-		check(err, "Failed to verify public key:")
+		check(err, "Failed to verify public key.")
 
 		// Since we verified everything successfully, save the certficate in the cache.
 		cacheCertFile := filepath.Join(dataDir, getCallsign(*cert)+".der")

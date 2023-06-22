@@ -268,7 +268,7 @@ func main() {
 	rootFiles, _ = os.ReadDir(rootsCacheDir)
 	for _, f := range rootFiles {
 		if strings.HasSuffix(strings.ToLower(f.Name()), ".der") {
-			der, err := dataFiles.ReadFile(filepath.Join(rootsCacheDir, f.Name()))
+			der, err := os.ReadFile(filepath.Join(rootsCacheDir, f.Name()))
 			check(err, "Failed to read a root certificate from cache.")
 			crt, err := x509.ParseCertificate(der)
 			check(err, "Failed to parse a root certificate from cache.")

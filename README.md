@@ -93,7 +93,9 @@ This is a [Go](https://go.dev/) program, so this should be easy enough, provided
 
     go install github.com/Mihara/lotw-trust@latest
 
-It was written with go 1.20.5 and I currently don't know what's the minimum version requirement. Binaries for a number of platforms are provided in the releases section.
+It was written with go 1.20.5 and I currently don't know what's the minimum version requirement. Binaries for a number of platforms are provided in the releases section. `build.sh` will cross-compile binaries for all supported platforms.
+
+See `testcases` and `test.sh` for simple test cases and a faux-LoTW certification tree structure to play with.
 
 ## Plans for future development
 

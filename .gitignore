@@ -21,5 +21,13 @@ go.work
 .vscode/launch.json
 build/*
 lotw-trust
-test.sh
 
+# Testcases tree
+testcases/results/*
+testcases/keys/cache/chain/*.der
+!testcases/keys/cache/chain/mockup.der
+testcases/keys/cache/*.der
+testcases/**/*.old
+
+# This, surprisingly, goes last.
+!.gitkeep

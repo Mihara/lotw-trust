@@ -1,0 +1,1 @@
+V	391125102225Z		01	unknown	/C=US/ST=CT/O=Fake American Radio Relay League/OU=Logbook of the World Mockup/CN=Logbook of the World Production CA Mockup/emailAddress=lotw@example.com

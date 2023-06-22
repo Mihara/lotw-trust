@@ -8,7 +8,9 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"embed"
+	"encoding/hex"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -51,6 +53,7 @@ var outputFile string
 var sigFile string
 
 var dataDir string
+var rootsCacheDir string
 
 // SigBlock is a struct containing the signature and associated data.
 // This structure is meant to be stable from here on out.
@@ -73,9 +76,13 @@ func init() {
 	l.SetFlags(0)
 
 	dataDir = filepath.Join(xdg.DataHome, "lotw-trust")
-	if _, err := os.Stat(dataDir); os.IsNotExist(err) {
-		err := os.MkdirAll(dataDir, os.ModeDir|0o755)
-		check(err, "Could not create or open "+dataDir)
+	rootsCacheDir = filepath.Join(dataDir, "roots")
+	// Yeah, that is a pythonism.
+	for _, d := range []string{dataDir, rootsCacheDir} {
+		if _, err := os.Stat(d); os.IsNotExist(err) {
+			err := os.MkdirAll(d, os.ModeDir|0o755)
+			check(err, "Could not create or open "+d)
+		}
 	}
 
 	keyPass = ""
@@ -419,7 +426,7 @@ func main() {
 			sigBlock, err = uncompress(sigBlock)
 			// If the sig block was never compressed, this is the error we will get,
 			// so we eat it and move on.
-			if err != zlib.ErrHeader {
+			if !errors.Is(err, zlib.ErrHeader) {
 				check(err, "Failed to decompress signature.")
 			}
 		}
@@ -478,6 +485,17 @@ func main() {
 				l.Println("Saved", certName)
 			}
 		}
+		// If we have any intermediate certificates in the cache, dump them into the pool too.
+		cachedRootFiles, _ := os.ReadDir(rootsCacheDir)
+		for _, f := range cachedRootFiles {
+			if strings.HasSuffix(f.Name(), ".der") {
+				der, err := os.ReadFile(filepath.Join(rootsCacheDir, f.Name()))
+				check(err, "Could not read file from intermediary certificate cache.")
+				crt, err := x509.ParseCertificate(der)
+				check(err, "Could not parse intermediary certificate cache file "+f.Name())
+				extraCerts.AddCert(crt)
+			}
+		}
 
 		// Verify the actual signature.
 		var hashingData []byte
@@ -502,7 +520,7 @@ func main() {
 
 		check(err, "Failed to verify signature.")
 
-		_, err = cert.Verify(x509.VerifyOptions{
+		chains, err := cert.Verify(x509.VerifyOptions{
 			Intermediates: extraCerts,
 			Roots:         roots,
 			// LoTW intermediate certificates are *expected* to expire during
@@ -518,6 +536,20 @@ func main() {
 		cacheCertFile := filepath.Join(dataDir, getCallsign(*cert)+".der")
 		err = os.WriteFile(cacheCertFile, cert.Raw, 0666)
 		check(err, "Could not save public key to cache.")
+
+		// If the successful verification chains contain any unknown intermediate
+		// certificates, cache them as well.
+		for _, chain := range chains {
+			for _, c := range chain {
+				if !certInList(rootCerts, c) && c.IsCA {
+					cacheRootFile := filepath.Join(rootsCacheDir, hex.EncodeToString(c.SubjectKeyId)+".der")
+					if _, err := os.Stat(cacheRootFile); errors.Is(err, os.ErrNotExist) {
+						err = os.WriteFile(cacheRootFile, c.Raw, 0666)
+						check(err, "Could not save intermediate root certificate to cache.")
+					}
+				}
+			}
+		}
 
 		displayTime, _ := verificationTime.UTC().MarshalText()
 		l.Println("Signed by:", getCallsign(*cert), "on", string(displayTime))

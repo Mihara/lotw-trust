@@ -81,12 +81,10 @@ func init() {
 	flaggy.SetName("lotw-trust")
 	flaggy.SetDescription(fmt.Sprint("Sign and verify arbitrary files with your LoTW tQSL signing key. \nversion ", version))
 
-	flaggy.DefaultParser.AdditionalHelpAppend = fmt.Sprintf(`
-Public keys are cached in %s
-
+	flaggy.DefaultParser.AdditionalHelpAppend = `
 Copyright © 2023 Eugene Medvedev (R2AZE).
 See the source code at: https://github.com/Mihara/lotw-trust
-Released under the terms of MIT license.`, dataDir)
+Released under the terms of MIT license.`
 
 	flaggy.String(&dataDir, "c", "cachedir", "Key cache directory")
 

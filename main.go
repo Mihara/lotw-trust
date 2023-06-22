@@ -52,6 +52,7 @@ var outputFile string
 var sigFile string
 
 var dataDir string
+var chainCacheDir string
 var rootsCacheDir string
 
 // SigBlock is a struct containing the signature and associated data.
@@ -114,9 +115,10 @@ Released under the terms of MIT license.`
 	flaggy.Parse()
 
 	// This needs to be done here, after we've parsed the flags.
+	chainCacheDir = filepath.Join(dataDir, "chain")
 	rootsCacheDir = filepath.Join(dataDir, "roots")
 	// Yeah, that is a pythonism.
-	for _, d := range []string{dataDir, rootsCacheDir} {
+	for _, d := range []string{dataDir, chainCacheDir, rootsCacheDir} {
 		if _, err := os.Stat(d); os.IsNotExist(err) {
 			err := os.MkdirAll(d, os.ModeDir|0o755)
 			check(err, "Could not create or open "+d)
@@ -257,6 +259,22 @@ func main() {
 		crt, _ := x509.ParseCertificate(der)
 		roots.AddCert(crt)
 		rootCerts = append(rootCerts, crt)
+	}
+
+	// If our cache includes any extra trusted roots --
+	// which would have to be placed there manually, we never save them --
+	// slurp them in as well.
+	// This is also what lets us use a complete dummy hierarchy of certificates for testing.
+	rootFiles, _ = os.ReadDir(rootsCacheDir)
+	for _, f := range rootFiles {
+		if strings.HasSuffix(strings.ToLower(f.Name()), ".der") {
+			der, err := dataFiles.ReadFile(filepath.Join(rootsCacheDir, f.Name()))
+			check(err, "Failed to read a root certificate from cache.")
+			crt, err := x509.ParseCertificate(der)
+			check(err, "Failed to parse a root certificate from cache.")
+			roots.AddCert(crt)
+			rootCerts = append(rootCerts, crt)
+		}
 	}
 
 	if signCmd.Used {
@@ -480,10 +498,10 @@ func main() {
 			extraCerts.AddCert(crt)
 		}
 		// If we have any intermediate certificates in the cache, dump them into the pool too.
-		cachedRootFiles, _ := os.ReadDir(rootsCacheDir)
+		cachedRootFiles, _ := os.ReadDir(chainCacheDir)
 		for _, f := range cachedRootFiles {
-			if strings.HasSuffix(f.Name(), ".der") {
-				der, err := os.ReadFile(filepath.Join(rootsCacheDir, f.Name()))
+			if strings.HasSuffix(strings.ToLower(f.Name()), ".der") {
+				der, err := os.ReadFile(filepath.Join(chainCacheDir, f.Name()))
 				check(err, "Could not read file from intermediary certificate cache.")
 				crt, err := x509.ParseCertificate(der)
 				check(err, "Could not parse intermediary certificate cache file "+f.Name())
@@ -536,7 +554,7 @@ func main() {
 		for _, chain := range chains {
 			for _, c := range chain {
 				if !certInList(rootCerts, c) && c.IsCA {
-					cacheRootFile := filepath.Join(rootsCacheDir, hex.EncodeToString(c.SubjectKeyId)+".der")
+					cacheRootFile := filepath.Join(chainCacheDir, hex.EncodeToString(c.SubjectKeyId)+".der")
 					if _, err := os.Stat(cacheRootFile); errors.Is(err, os.ErrNotExist) {
 						err = os.WriteFile(cacheRootFile, c.Raw, 0666)
 						check(err, "Could not save intermediate root certificate to cache.")

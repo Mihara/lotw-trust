@@ -31,8 +31,8 @@ var version string
 
 const minSupportedVersion = "0.0.3"
 
-const textModeHeader = "-----BEGIN LOTW-TRUST MESSAGE-----\n"
-const textModeFooter = "\n-----END LOTW-TRUST MESSAGE-----\n"
+const textModeHeader = "-----LOTW-TRUST MESSAGE-----\n"
+const textModeFooter = "\n-----BEGIN LOTW-TRUST SIG-----\n"
 const textModeSigPem = "LOTW-TRUST SIG"
 
 // Binary mode header is the same with extra newlines.
@@ -187,7 +187,10 @@ func normalizeTextString(text string) string {
 	// Since we do not actually change the output format,
 	// it doesn't matter that much, as long as it's consistent
 	// so that a CRLF message does not get mis-verified on an LF system.
-	const replacement = "\r\n"
+	// PGP RFCs also say to trim tabs and spaces from all lines before hashing,
+	// and while it probably isn't necessary, it won't hurt either.
+	const replacement = "<NEWLINE>"
+	const finalNewline = "\r\n"
 
 	var replacer = strings.NewReplacer(
 		"\r\n", replacement,
@@ -199,7 +202,12 @@ func normalizeTextString(text string) string {
 		"\u2028", replacement,
 		"\u2029", replacement,
 	)
-	return replacer.Replace(text)
+	lines := strings.Split(replacer.Replace(text), replacement)
+	var outLines []string
+	for _, l := range lines {
+		outLines = append(outLines, strings.Trim(l, " \t"))
+	}
+	return strings.Join(outLines, finalNewline)
 }
 
 // Abstracting away compression and decompression, since that will be used multiple times.
@@ -344,7 +352,7 @@ func main() {
 
 			textData := textModeHeader
 			textData += string(fileData)
-			textData += textModeFooter
+			textData += "\n"
 			savingData = []byte(textData)
 
 			displayTime, _ := sig.SigningTime.UTC().Truncate(time.Second).MarshalText()

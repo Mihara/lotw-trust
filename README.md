@@ -83,7 +83,7 @@ It's possible to save the signature block to a separate file, verify such a sign
 
 `lotw-trust sign -a <input file> <output file>` will save an abbreviated version of the signature block, that only contains the signature itself and some glue, which saves you about ~1000 bytes of message size. To verify that, the recipient must have *previously* verified a message signed with that public key -- they get cached for just such an occasion.
 
-If your signing situation results in bundling intermediate certificates, I would very much like to see them. To save them, you can use `lotw-trust verify -d <input file>` and email the files that it dumps to me. Alternatively, you can verify your own signature and look into the `roots` subdirectory in the cache directory.
+If your signing situation results in bundling intermediate certificates, I would very much like to see them. The simplest way to let me do that is to send me the contents of your cache directory -- see the `-c` flag.
 
 `lotw-trust sign -t` and `lotw-trust verify -t` will treat the file as text, resulting in an ASCII-armor style file format that you could, in theory, stick into a pipeline in Winlink to automatically sign messages you send. Trying to sign binary files with this flag will produce ugly results, but will not necessarily fail.
 

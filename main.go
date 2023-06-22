@@ -44,7 +44,6 @@ var l *log.Logger
 
 var keyFile string
 var keyPass string
-var dumpDer bool
 var omitCert bool
 var textMode bool
 var uncSig bool
@@ -76,14 +75,6 @@ func init() {
 	l.SetFlags(0)
 
 	dataDir = filepath.Join(xdg.DataHome, "lotw-trust")
-	rootsCacheDir = filepath.Join(dataDir, "roots")
-	// Yeah, that is a pythonism.
-	for _, d := range []string{dataDir, rootsCacheDir} {
-		if _, err := os.Stat(d); os.IsNotExist(err) {
-			err := os.MkdirAll(d, os.ModeDir|0o755)
-			check(err, "Could not create or open "+d)
-		}
-	}
 
 	keyPass = ""
 
@@ -96,6 +87,8 @@ Public keys are cached in %s
 Copyright © 2023 Eugene Medvedev (R2AZE).
 See the source code at: https://github.com/Mihara/lotw-trust
 Released under the terms of MIT license.`, dataDir)
+
+	flaggy.String(&dataDir, "c", "cachedir", "Key cache directory")
 
 	// Create the subcommand
 	signCmd = flaggy.NewSubcommand("sign")
@@ -112,7 +105,6 @@ Released under the terms of MIT license.`, dataDir)
 	verifyCmd = flaggy.NewSubcommand("verify")
 	verifyCmd.Description = "Verify a file signed with a LoTW key."
 	verifyCmd.Bool(&textMode, "t", "textmode", "The input contains a text mode signature, and must be treated as such.")
-	verifyCmd.Bool(&dumpDer, "d", "dump_der", "Dump included CA certificates for investigation.")
 	verifyCmd.String(&sigFile, "s", "sig_file", "Read the signature block from a separate file. You can use '=' to read it from standard input.")
 	verifyCmd.AddPositionalValue(&inputFile, "INPUT", 1, true, "Input file to be verified. '=' to read from standard input.")
 	verifyCmd.AddPositionalValue(&outputFile, "OUTPUT", 2, false, "Output file. '=' to write to standard output.")
@@ -122,6 +114,16 @@ Released under the terms of MIT license.`, dataDir)
 
 	flaggy.SetVersion(version)
 	flaggy.Parse()
+
+	// This needs to be done here, after we've parsed the flags.
+	rootsCacheDir = filepath.Join(dataDir, "roots")
+	// Yeah, that is a pythonism.
+	for _, d := range []string{dataDir, rootsCacheDir} {
+		if _, err := os.Stat(d); os.IsNotExist(err) {
+			err := os.MkdirAll(d, os.ModeDir|0o755)
+			check(err, "Could not create or open "+d)
+		}
+	}
 
 }
 
@@ -474,24 +476,10 @@ func main() {
 
 		// Build the pool of intermediary certs supplied with the sig.
 		extraCerts := x509.NewCertPool()
-		if dumpDer {
-			l.Println("Will attempt to save included intermediate certificates...")
-		}
-		for idx, der := range sigData.CA {
+		for _, der := range sigData.CA {
 			crt, err := x509.ParseCertificate(der)
 			check(err, "Could not parse intermediate certificate authority data.")
 			extraCerts.AddCert(crt)
-			if dumpDer {
-				// Save certificates: This is the easy way to send me a LoTW certificate
-				// lotw-trust does not yet recognize.
-				certName := fmt.Sprintf("%s_%d.der", sigData.Callsign, idx)
-				if err := os.WriteFile(
-					certName,
-					crt.Raw, 0666); err != nil {
-					l.Fatal(err)
-				}
-				l.Println("Saved", certName)
-			}
 		}
 		// If we have any intermediate certificates in the cache, dump them into the pool too.
 		cachedRootFiles, _ := os.ReadDir(rootsCacheDir)

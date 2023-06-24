@@ -60,6 +60,10 @@ There is currently no way for us to know if a user's certificate has been revoke
 
 Similarly, there is no way to prevent someone from using an expired certificate, since they can set the clock to what they want.
 
+### Privacy
+
+The certificate, as issued by LoTW, embeds the email address you used with LoTW -- I am not certain whether it is the address they had on file at the time they issued your certificate, or the address you registered with initially. While `lotw-trust` does not display this information anywhere or even access it, it's there, and anyone sufficiently crafty can extract it from the signature block of a file you signed. There is nothing I can do to prevent this.
+
 ### General caveats
 
 I am not a cryptographer, I am a sociologist. Golang is not my best language, it's just the one that got me the result the quickest, while still allowing to easily make a cross-platform tool.

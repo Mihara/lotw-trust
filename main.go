@@ -1,3 +1,11 @@
+/*
+Copyright (c) 2023 by Eugene Medvedev (R2AZE)
+
+Use of this source code is governed by an MIT-style
+license that can be found in the LICENSE file or at
+https://opensource.org/licenses/MIT.
+*/
+
 package main
 
 import (
@@ -16,6 +24,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -31,8 +40,9 @@ var version string
 
 const minSupportedVersion = "0.0.3"
 
-const textModeHeader = "-----LOTW-TRUST MESSAGE-----\n"
-const textModeFooter = "\n-----BEGIN LOTW-TRUST SIG-----\n"
+const textModeHeader = "-----LOTW-TRUST MESSAGE-----"
+const textModeFooter = "-----BEGIN LOTW-TRUST SIG-----"
+const textModeEnding = "-----END LOTW-TRUST SIG-----"
 const textModeSigPem = "LOTW-TRUST SIG"
 
 // Binary mode header is the same with extra newlines.
@@ -179,6 +189,34 @@ func saveFile(filename string, fileData []byte) {
 	}
 }
 
+func detectNewline(text string) string {
+	// Detect a newline character based on the text file.
+	// Textmode needs to introduce newlines into the text,
+	// which might not be in the system-dominant
+	// newlines.
+
+	if strings.Index(text, "\r\n") > 0 {
+		// Contains a single windows newline? Use windows newlines.
+		return "\r\n"
+	} else if strings.Index(text, "\r") > 0 {
+		// Contains an osx newline - use osx newlines.
+		return "\r"
+	} else if strings.Index(text, "\n") > 0 {
+		// Contains a linux newline - use linux newlines.
+		return "\n"
+	}
+
+	// In case the input text contains none of that, return an os-based default.
+	switch runtime.GOOS {
+	case "windows":
+		return "\r\n"
+	case "darwin":
+		return "\r"
+	default:
+		return "\n"
+	}
+}
+
 func normalizeText(text []byte) []byte {
 	output := normalizeTextString(string(text))
 	return []byte(output)
@@ -198,17 +236,30 @@ func normalizeTextString(text string) string {
 		"\r\n", replacement,
 		"\r", replacement,
 		"\n", replacement,
-		"\v", replacement,
-		"\f", replacement,
-		"\u0085", replacement,
-		"\u2028", replacement,
-		"\u2029", replacement,
 	)
-	lines := strings.Split(replacer.Replace(text), replacement)
-	var outLines []string
-	for _, l := range lines {
-		outLines = append(outLines, strings.Trim(l, " \t"))
+
+	var textLines []string
+	for _, l := range strings.Split(replacer.Replace(text), replacement) {
+		textLines = append(textLines, strings.Trim(l, " \t"))
 	}
+
+	// All preceding empty lines and all tailing empty lines must be ignored when signing as well.
+	var tailingLines []string
+	for i, s := range textLines {
+		if s != "" {
+			tailingLines = textLines[i:]
+			break
+		}
+	}
+
+	var outLines []string
+	for i := len(tailingLines) - 1; i >= 0; i-- {
+		if tailingLines[i] != "" {
+			outLines = tailingLines[:i+1]
+			break
+		}
+	}
+
 	return strings.Join(outLines, finalNewline)
 }
 
@@ -369,8 +420,7 @@ func main() {
 			// PEM to the rescue!
 
 			textData := textModeHeader
-			textData += string(fileData)
-			textData += "\n"
+			textData += "\n" + string(fileData) + "\n"
 			savingData = []byte(textData)
 
 			displayTime, _ := sig.SigningTime.UTC().Truncate(time.Second).MarshalText()
@@ -402,13 +452,17 @@ func main() {
 		fileData := slurpFile(inputFile)
 
 		var sigBlock []byte
+		var rawTextHeader string
+		var rawTextFooter string
+		var restText string
+		var found bool
 
 		if sigFile == "" {
 
 			if textMode {
 				// Text mode makes everything more complicated on read, too.
 				textData := string(fileData)
-				_, restText, found := strings.Cut(textData, textModeHeader)
+				rawTextHeader, restText, found = strings.Cut(textData, textModeHeader)
 				if !found {
 					l.Fatal("The file does not appear to be signed in text mode.")
 				}
@@ -419,9 +473,17 @@ func main() {
 				}
 				signedText := restText[:tailEnd]
 
-				fileData = []byte(normalizeTextString(signedText))
+				postSig := strings.LastIndex(restText, textModeEnding)
+				if postSig < 0 {
+					l.Fatal("Signed message appears to be missing parts of the signature.")
+				}
 
-				block, _ := pem.Decode([]byte(restText))
+				rawTextFooter = restText[postSig+len(textModeEnding):]
+
+				fileData = []byte(normalizeTextString(signedText))
+				// Amusingly, OSX line endings can also cause pem to fail to decode.
+				// So we normalize the restText before feeding it into the decoder.
+				block, _ := pem.Decode([]byte(normalizeTextString(restText)))
 				if block == nil || block.Type != textModeSigPem {
 					l.Fatal("Signature not found.")
 				}
@@ -445,7 +507,7 @@ func main() {
 		var sigData SigBlock
 		if !textMode {
 			if !bytes.Equal(sigBlock[:len(sigHeader)], []byte(sigHeader)) {
-				l.Fatal("Missing signature header, file probably isn't signed.")
+				l.Fatal("Could not find signature in file.")
 			}
 			sigBlock = sigBlock[len(sigHeader):]
 			// While we're at it, try to uncompress sig block.
@@ -566,10 +628,16 @@ func main() {
 		displayTime, _ := verificationTime.UTC().MarshalText()
 		l.Println("Signed by:", getCallsign(*cert), "on", string(displayTime))
 		if textMode {
-			textData := []byte(fmt.Sprintf("\n-----VERIFIED BY LOTW-TRUST-----\nSigned by: %s on %s",
+			newLine := detectNewline(string(fileData))
+			textData := []byte(rawTextHeader)
+			textData = append(textData, []byte("-----LOTW-TRUST SIGNED----"+newLine)...)
+			textData = append(textData, fileData...)
+			textData = append(textData, []byte(fmt.Sprintf(
+				"%s-----LOTW-TRUST VERIFIED-----%sSigned by: %s on %s", newLine, newLine,
 				getCallsign(*cert),
-				string(displayTime)))
-			fileData = append(fileData, textData...)
+				string(displayTime)))...)
+			textData = append(textData, []byte(rawTextFooter)...)
+			fileData = textData
 		}
 
 		saveFile(outputFile, fileData)

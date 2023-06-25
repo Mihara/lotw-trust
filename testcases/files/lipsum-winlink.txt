@@ -1,0 +1,75 @@
+Mid: LFC0HU68UBAY
+Body: 2138
+Date: 2023/06/22 13:59
+From: SERVICE
+Mbo: SERVICE
+Subject: Test Message
+To: N0CALL
+X-Marsprecedence: Routine
+X-Wl2kprecedence: Routine
+
+This is a signed message imitating a file that came in from Winlink.
+It should decode in a very particular way, producing an undamaged file on the other end. Body length is not handles, and I'm not sure I should..
+
+-----LOTW-TRUST MESSAGE-----
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Imperdiet massa tincidunt nunc pulvinar sapien et ligula. Enim facilisis gravida neque convallis a cras semper. Viverra maecenas accumsan lacus vel facilisis volutpat est. Nunc sed velit dignissim sodales ut eu sem. Tellus integer feugiat scelerisque varius morbi. Nec nam aliquam sem et tortor consequat. Urna porttitor rhoncus dolor purus. Ac ut consequat semper viverra. Amet venenatis urna cursus eget nunc scelerisque viverra mauris. Tortor condimentum lacinia quis vel eros. Tellus cras adipiscing enim eu turpis egestas pretium aenean. Duis convallis convallis tellus id interdum. Varius duis at consectetur lorem donec massa sapien faucibus et. Aenean euismod elementum nisi quis eleifend quam adipiscing. Nibh sit amet commodo nulla facilisi nullam. Sit amet purus gravida quis blandit. Nullam vehicula ipsum a arcu cursus vitae congue mauris.
+
+Dui accumsan sit amet nulla. Nunc sed blandit libero volutpat sed cras ornare arcu dui. Tellus at urna condimentum mattis pellentesque id nibh tortor. Magna sit amet purus gravida quis blandit turpis cursus in. Non curabitur gravida arcu ac tortor dignissim convallis aenean. Sed risus ultricies tristique nulla. Varius duis at consectetur lorem donec massa sapien. Lobortis feugiat vivamus at augue eget arcu dictum varius duis. Netus et malesuada fames ac turpis egestas integer. Lectus magna fringilla urna porttitor rhoncus dolor. Dignissim cras tincidunt lobortis feugiat vivamus at. Non odio euismod lacinia at quis. Praesent elementum facilisis leo vel fringilla.
+
+At tempor commodo ullamcorper a lacus. Sit amet massa vitae tortor condimentum lacinia quis vel eros. Non blandit massa enim nec. Tortor at risus viverra adipiscing at. Nulla pellentesque dignissim enim sit amet venenatis urna cursus. Eget lorem dolor sed viverra ipsum nunc. Vitae ultricies leo integer malesuada nunc vel risus commodo viverra. Accumsan in nisl nisi scelerisque eu. At quis risus sed vulputate odio ut enim blandit. Dictum varius duis at consectetur lorem donec massa. Ultrices dui sapien eget mi proin sed. Nisl vel pretium lectus quam id leo. Ipsum a arcu cursus vitae congue mauris rhoncus.
+
+Nisl suscipit adipiscing bibendum est ultricies integer quis auctor elit. Nulla porttitor massa id neque aliquam. Praesent semper feugiat nibh sed pulvinar proin gravida. Interdum velit laoreet id donec. Feugiat in ante metus dictum at tempor. Convallis posuere morbi leo urna molestie at elementum. Netus et malesuada fames ac turpis egestas integer eget aliquet. Gravida cum sociis natoque penatibus et. Amet facilisis magna etiam tempor orci eu lobortis elementum nibh. Tristique nulla aliquet enim tortor. At tellus at urna condimentum mattis pellentesque id nibh tortor. Lectus mauris ultrices eros in. Purus faucibus ornare suspendisse sed nisi lacus sed viverra tellus. Vestibulum lectus mauris ultrices eros in cursus turpis. Pharetra convallis posuere morbi leo urna molestie at elementum.
+
+Bibendum arcu vitae elementum curabitur vitae. Eu facilisis sed odio morbi quis commodo. Tristique et egestas quis ipsum suspendisse. Eu volutpat odio facilisis mauris sit amet massa vitae tortor. Ultricies integer quis auctor elit. Quis ipsum suspendisse ultrices gravida dictum. Integer malesuada nunc vel risus commodo viverra maecenas accumsan lacus. Eget duis at tellus at urna. Egestas egestas fringilla phasellus faucibus scelerisque eleifend donec pretium vulputate. Turpis egestas maecenas pharetra convallis posuere. Nunc sed id semper risus. Nunc scelerisque viverra mauris in aliquam sem fringilla ut morbi. Id consectetur purus ut faucibus pulvinar. Nisi porta lorem mollis aliquam ut porttitor leo a. Nunc aliquet bibendum enim facilisis gravida neque convallis a cras. Enim eu turpis egestas pretium aenean pharetra magna. Vitae nunc sed velit dignissim sodales.
+
+
+-----BEGIN LOTW-TRUST SIG-----
+Date: 2023-06-25T11:06:55Z
+Signer: N0CALL
+
+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
+-----END LOTW-TRUST SIG-----

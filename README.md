@@ -1,12 +1,14 @@
-# lotw-trust
+# lotw-trust -- sign arbitrary files with your LoTW key and verify such signatures
 
 ⚠️ **WARNING** ⚠️
 
-This is highly experimental.
+This is an experimental program.
 
-Do not use this program for anything critical. Right now it's still very much an evening project waiting for feedback from people trying to use it. The text mode format in particular is probably not stable.
+Despite occasional enthusiastic comments, I have yet to see any bug reports, or even any reports from people trying to use it in the wild at all. As such, I reserve the right to change file formats if I decide this is beneficial or convenient, until version 1.0.0 strikes.
 
-Please experiment with it, that's the right word.
+As of this moment, this tool is feature complete. Now it needs to become bug-free, so please stress-test and torture it.
+
+Alternatively it could be completely forgotten as most innovations in this hobby are. It's not like radio didn't work without all that before.
 
 ## What is it?
 
@@ -52,7 +54,7 @@ As a result, if LoTW makes a new layer #2 key after you got your layer #3 key an
 
 To make matters more complicated, the #1 Big Master Key is also not eternal, and has an expiry time measured in decades -- the current one expires in 2025. It isn't signed by the key from the previous decade either, so you definitely will not be able to produce an unbroken chain of keys to known keys past 2025, when the current one expires, unless the new key surfaces in trustworthy data earlier than that.
 
-It would be a lot smoother if I can get LoTW to publish their public keys properly. Otherwise, I anticipate that `lotw-trust` will need to be updated on average no less than once a year to keep working, which will be a hassle for service owners.
+It would be a lot smoother if I can get LoTW to publish their public keys in a central trustworthy place. Otherwise, I anticipate that `lotw-trust` will need to be updated on average no less than once a year to keep working, which will be a hassle for service owners.
 
 ### Certificate revocation
 
@@ -89,7 +91,7 @@ It's possible to save the signature block to a separate file, verify such a sign
 
 If your signing situation results in bundling intermediate certificates, I would very much like to see them. The simplest way to let me do that is to send me the contents of your cache directory -- see the `-c` flag.
 
-`lotw-trust sign -t` and `lotw-trust verify -t` will treat the file as text, resulting in an ASCII-armor style file format that you could, in theory, stick into a pipeline in Winlink to automatically sign messages you send. Trying to sign binary files with this flag will produce ugly results, but will not necessarily fail.
+`lotw-trust sign -t` and `lotw-trust verify -t` will treat the file as text, resulting in an ASCII-armor style message format that you could, in theory, stick into a pipeline in Winlink to automatically sign messages you send and verify messages. Be aware that text mode signing does *not* result in a file identical to source upon verification, and is meant for direct human consumption on both ends. Trying to sign binary files with this flag will produce ugly results, but will not necessarily fail.
 
 ## Installation and compilation
 
@@ -100,12 +102,6 @@ This is a [Go](https://go.dev/) program, so this should be easy enough, provided
 It was written with go 1.20.5 and I currently don't know what's the minimum version requirement. Binaries for a number of platforms are provided in the releases section. `build.sh` will cross-compile binaries for all supported platforms.
 
 See `testcases` and `test.sh` for simple test cases and a faux-LoTW certification tree structure to play with.
-
-## Plans for future development
-
-As of this moment, this tool is feature complete. Now it needs to become bug-free and formats need to stabilize. Please stress-test and torture it.
-
-Alternatively it could be completely forgotten as most innovations usually are. It's not like radio didn't work without all that before.
 
 ## License
 

@@ -146,10 +146,14 @@ func certInList(a []*x509.Certificate, x *x509.Certificate) bool {
 	return false
 }
 
-func check(e error, message string) {
+func check(e error, message any) {
 	if e != nil {
-		l.Fatal(message, " ", e)
+		l.Fatal("ERROR: ", message, " ", e)
 	}
+}
+
+func die(message ...any) {
+	l.Fatal("ERROR: ", message)
 }
 
 func getCallsign(c x509.Certificate) string {
@@ -179,11 +183,11 @@ func saveFile(filename string, fileData []byte) {
 	if filename != "" {
 		if filename == "=" {
 			if _, err := os.Stdout.Write(fileData); err != nil {
-				l.Fatal("Error while saving a file:", err)
+				die("Error while saving a file:", err)
 			}
 		} else {
 			if err := os.WriteFile(filename, fileData, 0666); err != nil {
-				l.Fatal("Error while saving a file:", err)
+				die("Error while saving a file:", err)
 			}
 		}
 	}
@@ -240,7 +244,7 @@ func normalizeTextString(text string) string {
 
 	var textLines []string
 	for _, l := range strings.Split(replacer.Replace(text), replacement) {
-		textLines = append(textLines, strings.Trim(l, " \t"))
+		textLines = append(textLines, strings.TrimSpace(l))
 	}
 
 	// All preceding empty lines and all tailing empty lines must be ignored when signing as well.
@@ -337,15 +341,15 @@ func main() {
 		check(err, "Could not make sense of the key file.")
 
 		if time.Now().After(cert.NotAfter) {
-			l.Fatal("Cannot use a LoTW certificate beyond its expiry time.")
+			die("Cannot use a LoTW certificate beyond its expiry time.")
 		}
 		if time.Now().Before(cert.NotBefore) {
-			l.Fatal("Cannot use a LoTW certificate before it goes active.")
+			die("Cannot use a LoTW certificate before it goes active.")
 		}
 
 		callsign := getCallsign(*cert)
 		if callsign == "" {
-			l.Fatal("The signing key does not appear to be a LoTW key.")
+			die("The signing key does not appear to be a LoTW key.")
 		}
 
 		// Slurp the input file...
@@ -374,7 +378,7 @@ func main() {
 				hashed[:],
 			)
 		default:
-			l.Fatal("You have discovered a LoTW key of a previously unseen, unsupported type! Please email me about it.")
+			die("You have discovered a LoTW key of a previously unseen, unsupported type! Please email me about it.")
 		}
 		check(err, "Signing failure, something weird happened.")
 
@@ -464,18 +468,18 @@ func main() {
 				textData := string(fileData)
 				rawTextHeader, restText, found = strings.Cut(textData, textModeHeader)
 				if !found {
-					l.Fatal("The file does not appear to be signed in text mode.")
+					die("The file does not appear to be signed in text mode.")
 				}
 
 				tailEnd := strings.LastIndex(restText, textModeFooter)
 				if tailEnd < 0 {
-					l.Fatal("Signed message seems to have lost a chunk.")
+					die("Signed message seems to have lost a chunk.")
 				}
 				signedText := restText[:tailEnd]
 
 				postSig := strings.LastIndex(restText, textModeEnding)
 				if postSig < 0 {
-					l.Fatal("Signed message appears to be missing parts of the signature.")
+					die("Signed message appears to be missing parts of the signature.")
 				}
 
 				rawTextFooter = restText[postSig+len(textModeEnding):]
@@ -485,7 +489,7 @@ func main() {
 				// So we normalize the restText before feeding it into the decoder.
 				block, _ := pem.Decode([]byte(normalizeTextString(restText)))
 				if block == nil || block.Type != textModeSigPem {
-					l.Fatal("Signature not found.")
+					die("Signature not found.")
 				}
 
 				sigBlock, err = uncompress(block.Bytes)
@@ -494,7 +498,7 @@ func main() {
 			} else {
 				sigStart := bytes.LastIndex(fileData, []byte(sigHeader))
 				if sigStart < 0 {
-					l.Fatal("Broken or missing signature block.")
+					die("Broken or missing signature block.")
 				}
 				sigBlock = fileData[sigStart:]
 				fileData = fileData[:sigStart]
@@ -507,7 +511,7 @@ func main() {
 		var sigData SigBlock
 		if !textMode {
 			if !bytes.Equal(sigBlock[:len(sigHeader)], []byte(sigHeader)) {
-				l.Fatal("Could not find signature in file.")
+				die("Could not find signature in file.")
 			}
 			sigBlock = sigBlock[len(sigHeader):]
 			// While we're at it, try to uncompress sig block.
@@ -528,13 +532,13 @@ func main() {
 		check(err, "Broken version number in signature block.")
 
 		if myVersion.Compare(sigVersion) < 0 {
-			l.Fatal("File is signed with a newer version of lotw-trust than v", myVersion)
+			die("File is signed with a newer version of lotw-trust than v", myVersion)
 		}
 
 		if myVersion.Compare(sigVersion) > 0 {
 			oldVersion, _ := semver.Parse(minSupportedVersion)
 			if sigVersion.Compare(oldVersion) < 0 {
-				l.Fatal("Cannot verify signatures made with versions older than v", minSupportedVersion)
+				die("Cannot verify signatures made with versions older than v", minSupportedVersion)
 			}
 		}
 
@@ -589,7 +593,7 @@ func main() {
 				sigData.Signature,
 			)
 		default:
-			l.Fatal("Unsupported signature algorithm. This shouldn't happen, which means you found a bug.")
+			die("Unsupported signature algorithm. This shouldn't happen, which means you found a bug.")
 		}
 
 		check(err, "Failed to verify signature.")
@@ -628,16 +632,24 @@ func main() {
 		displayTime, _ := verificationTime.UTC().MarshalText()
 		l.Println("Signed by:", getCallsign(*cert), "on", string(displayTime))
 		if textMode {
+			// Text mode file output tries to preserve anything not bracketed with the "signed text"
+			// markers, and instead brackets it in new ones which say the signed text was verified.
 			newLine := detectNewline(string(fileData))
-			textData := []byte(rawTextHeader)
-			textData = append(textData, []byte("-----LOTW-TRUST SIGNED----"+newLine)...)
-			textData = append(textData, fileData...)
-			textData = append(textData, []byte(fmt.Sprintf(
-				"%s-----LOTW-TRUST VERIFIED-----%sSigned by: %s on %s", newLine, newLine,
-				getCallsign(*cert),
-				string(displayTime)))...)
-			textData = append(textData, []byte(rawTextFooter)...)
-			fileData = textData
+			fileData = bytes.Join(
+				[][]byte{
+					[]byte(rawTextHeader),
+					[]byte("-----LOTW-TRUST SIGNED----" + newLine),
+					fileData,
+					[]byte(fmt.Sprintf(
+						"%s-----LOTW-TRUST VERIFIED-----%sSigned by: %s on %s",
+						newLine,
+						newLine,
+						getCallsign(*cert),
+						string(displayTime))),
+					[]byte(rawTextFooter),
+				},
+				[]byte{},
+			)
 		}
 
 		saveFile(outputFile, fileData)

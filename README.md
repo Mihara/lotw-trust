@@ -52,9 +52,11 @@ As a result, if LoTW makes a new layer #2 key after you got your layer #3 key an
 
 `lotw-trust` attempts to work around this by keeping a list of layer #1 and #2 keys known to belong to LoTW, -- that is, I took them from *my* `.tq6` file, check the [roots directory](roots) -- and, when signing things, packing every public key that comes in your `.tq6` file that it hasn't seen before in with the signature. This bloats the signature size, and is best avoided.
 
-To make matters more complicated, the #1 Big Master Key is also not eternal, and has an expiry time measured in decades -- the current one expires in 2025. It isn't signed by the key from the previous decade either, so you definitely will not be able to produce an unbroken chain of keys to known keys past 2025, when the current one expires, unless the new key surfaces in trustworthy data earlier than that.
+To make matters more complicated, the #1 Big Master Key is also not eternal, and has an expiry time measured in decades -- the current one expires in 2025. It isn't signed by the key from the previous decade either, so there's no single big key you can acquire from a well-known location and trust.
 
-It would be a lot smoother if I can get LoTW to publish their public keys in a central trustworthy place. Otherwise, I anticipate that `lotw-trust` will need to be updated on average no less than once a year to keep working, which will be a hassle for service owners.
+It would be a lot smoother if I can get LoTW to publish their public keys in a central trustworthy place. I emailed them about that, and while the automatic response claims the message was received, it remained unanswered for well over a month now.
+
+As a result, I anticipate that `lotw-trust` will need to be updated on average no less than once a year to keep working, which will be a hassle for service owners.
 
 ### Certificate revocation
 

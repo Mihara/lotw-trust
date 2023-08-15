@@ -5,7 +5,7 @@ go 1.20
 require (
 	github.com/adrg/xdg v0.4.0
 	github.com/blang/semver/v4 v4.0.0
-	github.com/fxamacker/cbor/v2 v2.4.0
+	github.com/fxamacker/cbor/v2 v2.5.0
 	github.com/integrii/flaggy v1.5.2
 	software.sslmate.com/src/go-pkcs12 v0.2.1
 )

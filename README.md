@@ -32,9 +32,9 @@ This project is an attempt to make that as easy to set up for a service owner as
 
 ### On the matter of LoTW root certificates
 
-[Instructions describing how to verify a tq8 file](https://lotw.arrl.org/lotw-help/developer-tq8/) claim that *"A Digitally Signed Log file can be used to establish proof of identify"* -- which is true, but only to a point. While the steps described are sufficient to verify that the signed file has not been damaged -- that is, that the included public key matches the secret key that was used to sign the records therein -- it does not describe how to verify that the included public key has in fact been issued by LoTW.
+[Instructions describing how to verify a tq8 file](https://lotw.arrl.org/lotw-help/developer-tq8/) claim that *"A Digitally Signed Log file can be used to establish proof of identify"* -- which is true, but only to a point. While the steps described are sufficient to verify that the signed file has not been damaged -- that is, that the included public key matches the secret key that was used to sign the records therein -- it does not describe how to verify that the included public key has in fact been issued by LoTW. It is relatively trivial to produce a tq8 file that the above cited procedure will find no fault with, but LoTW proper will reject.
 
-LoTW does not currently *publish* enough information for us to do that latter verification independently. It's not that it doesn't exist, but you have to go fishing for it.
+LoTW does not currently *publish* enough information for us to verify the entire chain independently. It's not that it doesn't exist, but you have to go fishing for it.
 
 To simplify things, a public key infrastructure with a central certificate authority typically works kind of like this:
 
@@ -46,7 +46,7 @@ To verify that a key on layer #3 is what it says it is, you need to follow the c
 
 This is not quite so with LoTW, where `.tq8` files only include your own public key, that is, layer #3. It is signed with a layer #2 key, but that doesn't do you much good if you don't have a copy to verify against.
 
-The only place where I found the requisite #2 and #1 layer public keys was my own `.tq6` file that arrived from LoTW with my certificate -- there is no obvious way it's published on their website. I emailed LoTW to inquire about them, and they did not reply so far.
+The only place where I found the requisite #2 and #1 layer public keys was my own `.tq6` file that arrived from LoTW with my certificate -- there is no obvious way it's published on their website.
 
 As a result, if LoTW makes a new layer #2 key after you got your layer #3 key and received the corresponding `.tq6` key file, the data you possess will be insufficient to verify the authenticity of a `.tq8` file signed by a person who got their `.tq6` later than you. The way their layer #2 key expiry times are set, this inevitably happens.
 
@@ -54,15 +54,15 @@ As a result, if LoTW makes a new layer #2 key after you got your layer #3 key an
 
 To make matters more complicated, the #1 Big Master Key is also not eternal, and has an expiry time measured in decades -- the current one expires in 2025. It isn't signed by the key from the previous decade either, so there's no single big key you can acquire from a well-known location and trust.
 
-It would be a lot smoother if I can get LoTW to publish their public keys in a central trustworthy place. I emailed them about that, and while the automatic response claims the message was received, it remained unanswered for well over a month now.
+It would be a lot smoother if LoTW published their public keys in a central trustworthy place. However, my email with questions on the matter was acknowledged as received and then ignored months ago with no sign anyone gave it any thought, so I can only conclude that LoTW is not interested in their keys being used for independent verification of anything.
 
-As a result, I anticipate that `lotw-trust` will need to be updated on average no less than once a year to keep working, which will be a hassle for service owners.
+Consequently, I anticipate that `lotw-trust` will need to be updated on average no less than once a year to keep working, which will be a hassle for service owners.
 
 ### Certificate revocation
 
 There is currently no way for us to know if a user's certificate has been revoked or not. LoTW does not expose this information publicly anywhere, so you can only know if it expired, because that's written inside the certificate itself. I doubt they have set up the machinery for revoking certificates at all, in fact.
 
-Similarly, there is no way to prevent someone from using an expired certificate, since they can set the clock to what they want.
+Similarly, there is no way to prevent someone from using an expired certificate, since they can set the clock to what they want, and we can't really reject files signed in the past because the keys used to sign them have legitimately expired since.
 
 ### Privacy
 

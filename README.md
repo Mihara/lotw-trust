@@ -70,9 +70,7 @@ The certificate, as issued by LoTW, embeds the email address you used with LoTW 
 
 ### General caveats
 
-I am not a cryptographer, I am a sociologist. Golang is not my best language, it's just the one that got me the result the quickest, while still allowing to easily make a cross-platform tool.
-
-As a result, it's not idiot proof even to my lax standards, not well written, has nondescript error messages, and is in general unpolished.
+I am not a cryptographer, I am a sociologist. Golang is not my best language, it's just the one that got me the result the quickest, while still allowing to easily make a cross-platform tool. As a result, it's rather unpolished.
 
 I am also not certain I fully understand what I am doing. The way I use standard cryptographic primitives could be laughably wrong and I wouldn't know without someone else telling me.
 
@@ -101,7 +99,7 @@ This is a [Go](https://go.dev/) program, so this should be easy enough, provided
 
     go install github.com/Mihara/lotw-trust@latest
 
-It was written with go 1.20.5 and I currently don't know what's the minimum version requirement. Binaries for a number of platforms are provided in the releases section. `build.sh` will cross-compile binaries for all supported platforms.
+The minimum required version of Go is set to be 1.21, though it could conceivably be compiled by 1.18 or later. Binaries for a number of platforms are provided in the releases section. `build.sh` will cross-compile binaries for all supported platforms.
 
 See `testcases` and `test.sh` for simple test cases and a faux-LoTW certification tree structure to play with.
 

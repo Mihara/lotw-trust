@@ -1,0 +1,33 @@
+# This smells like Ansible, but I'm not sure I'm doing this correctly, so this won't be enabled for a while.
+
+name: Go
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Go
+      uses: actions/setup-go@v3
+      with:
+        go-version: 1.20.5
+
+    - name: Build linux amd64
+      run: env GOOS=linux GOARCH=amd64 go build -o build/lotw-trust_linux -ldflags '-s -w'
+
+    - name: Build windows amd64
+      run: env GOOS=windows GOARCH=amd64 go build -o build/lotw-trust.exe -ldflags '-s -w'
+
+    - name: Build osx amd64
+      run: env GOOS=darwin GOARCH=amd64 go build -o build/lotw-trust_osx -ldflags '-s -w'
+
+    - name: Build raspberry
+      run: env GOOS=linux GOARCH=arm64 go build -o build/lotw-trust_rpi64 -ldflags '-s -w'

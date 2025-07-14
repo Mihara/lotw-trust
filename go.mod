@@ -7,7 +7,7 @@ toolchain go1.24.2
 require (
 	github.com/adrg/xdg v0.5.3
 	github.com/blang/semver/v4 v4.0.0
-	github.com/fxamacker/cbor/v2 v2.8.0
+	github.com/fxamacker/cbor/v2 v2.9.0
 	github.com/integrii/flaggy v1.5.2
 	software.sslmate.com/src/go-pkcs12 v0.5.0
 )

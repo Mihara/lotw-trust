@@ -1,12 +1,12 @@
 module github.com/Mihara/lotw-trust
 
-go 1.24.0
+go 1.25
 
 require (
 	github.com/adrg/xdg v0.5.3
 	github.com/blang/semver/v4 v4.0.0
 	github.com/fxamacker/cbor/v2 v2.9.0
-	github.com/integrii/flaggy v1.5.2
+	github.com/integrii/flaggy v1.7.1
 	software.sslmate.com/src/go-pkcs12 v0.6.0
 )
 

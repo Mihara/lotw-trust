@@ -2,7 +2,13 @@
 
 ⚠️ **WARNING** ⚠️
 
-This is an experimental program.
+This was an experimental program.
+
+Due to absence of any evidence of use by anyone, and any actual community reaction, and the fact that LoTW's trustworthiness as a central certification source does not appear to be a concern of theirs, I'm archiving this project.
+
+I might return to it one day, but for now let this stand as it is and stop pestering me with dependency alerts.
+
+---
 
 Despite occasional enthusiastic comments, I have yet to see any bug reports, or even any reports from people trying to use it in the wild at all. As such, I reserve the right to change file formats if I decide this is beneficial or convenient, until version 1.0.0 strikes.
 
